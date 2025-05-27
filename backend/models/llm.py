@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFacePipeline, HuggingFaceEndpoint
-
+import transformers
 '''
     LLM class to create and manage LLMs.
 '''
@@ -52,7 +52,7 @@ class OpenAILLM(BaseLLM):
 class HuggingFacePipelineLLM(BaseLLM):
     """HuggingFace Pipeline implementation."""
     
-    def __init__(self, model_name: str, **kwargs):
+    def __init__(self, model_name: str, huggingface_api_token: str = None, quantization: bool = True, **kwargs):
         # Set default config for HF Pipeline
         default_config = {
             'temperature': 0.7,
@@ -61,13 +61,67 @@ class HuggingFacePipelineLLM(BaseLLM):
         }
         default_config.update(kwargs)
         super().__init__(model_name, **default_config)
+        self.quantization = quantization
+        self.huggingface_api_token = huggingface_api_token
+        self.model, self.tokenizer = self.create_model()
+        self.stopping_criteria = self.create_stopping_criteria()
+        self.pipeline = self.create_pipeline(self.model, self.tokenizer)
+
+    def create_model(self):
+        if self.quantization:
+            from torch import bfloat16
+            bnb_config = transformers.BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type='nf4',
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_compute_dtype=bfloat16
+            )
+
+            model_config = transformers.AutoConfig.from_pretrained(self.model_name, use_auth_token=self.huggingface_api_token)
+
+            model = transformers.AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                trust_remote_code=True,
+                config=model_config,
+                quantization_config=bnb_config,
+                device_map='auto',
+                use_auth_token=self.huggingface_api_token
+            )
+
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                self.model_name,
+                use_auth_token=self.huggingface_api_token
+            )
+
+            return model, tokenizer
+            
+    def create_stopping_criteria(self):
+        from utils.stopping_criteria import StopOnTokens
+        from transformers import StoppingCriteriaList
+
+        stopping_criteria = StoppingCriteriaList([StopOnTokens(self.tokenizer)])
+        return stopping_criteria
+
+
+
+    def create_pipeline(self, model, tokenizer):
+        streamer = transformers.TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+        generate_text_pipeline = transformers.pipeline(
+            model=model,
+            streamer=streamer,
+            tokenizer=tokenizer,
+            return_full_text=True,  # langchain expects the full text
+            task='text-generation',
+            # we pass model parameters here too
+            stopping_criteria=self.stopping_criteria,  # without this model rambles during chat
+            temperature=self.config['temperature'] if 'temperature' in self.config else 0.7,
+            max_new_tokens=self.config['max_new_tokens'] if 'max_new_tokens' in self.config else 512,
+            repetition_penalty=self.config['repetition_penalty'] if 'repetition_penalty' in self.config else 1.1
+        )   
+        return generate_text_pipeline
     
     def create_llm(self):
-        return HuggingFacePipeline.from_model_id(
-            model_id=self.model_name,
-            task="text-generation",
-            model_kwargs=self.config
-        )
+        return HuggingFacePipeline(pipeline=self.pipeline)
 
 
 class HuggingFaceEndpointLLM(BaseLLM):

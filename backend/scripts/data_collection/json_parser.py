@@ -14,6 +14,6 @@ class JsonParser:
                                                 metadata={'url': key, 'title': item['title'], 'description': item['description']}))
  
 if __name__ == "__main__":
-    parser = JsonParser("/Users/kunalbajaj/VAC/backend/scripts/data-collection/crawl_results/crawl_results_20250526_133954.json")
+    parser = JsonParser("/Users/kunalbajaj/VAC/backend/scripts/data_collection/crawl_results/crawl_results_20250526_133954.json")
     parser.parse_json()
     print(parser.documents[0])
