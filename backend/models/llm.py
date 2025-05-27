@@ -3,6 +3,11 @@ from typing import Any, Dict, Optional
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFacePipeline, HuggingFaceEndpoint
 import transformers
+from langchain.chat_models import init_chat_model
+import os
+import getpass
+
+
 '''
     LLM class to create and manage LLMs.
 '''
@@ -28,7 +33,9 @@ class BaseLLM(ABC):
 
 
 class OpenAILLM(BaseLLM):
-    """OpenAI/OpenRouter implementation."""
+    """OpenAI/OpenRouter implementation.
+    For DeepSeek OpenSource models.
+    """
     
     def __init__(self, model_name: str, api_key: str = None, **kwargs):
         self.api_key = api_key
@@ -141,10 +148,27 @@ class HuggingFaceEndpointLLM(BaseLLM):
         return HuggingFaceEndpoint(
             repo_id=self.model_name,
             huggingfacehub_api_token=self.api_token,
-            model_kwargs=self.config
+            temperature=self.config['temperature'] if 'temperature' in self.config else 0.7,
+            max_new_tokens=self.config['max_new_tokens'] if 'max_new_tokens' in self.config else 512
         )
 
 
+class MistralAILLM(BaseLLM):
+    """Mistral AI implementation."""
+    
+    def __init__(self, model_name: str, **kwargs):
+        super().__init__(model_name, **kwargs)
+
+    def create_llm(self):
+        model = init_chat_model(self.model_name,
+                                model_provider="mistralai",
+                                temperature=self.config['temperature'] if 'temperature' in self.config else 0.7,
+                                max_tokens=self.config['max_new_tokens'] if 'max_new_tokens' in self.config else 512,
+                                timeout=10,
+                                max_retries=3)
+        return model
+
+        
 class LLMFactory:
     """Factory class to create different LLM implementations."""
     
@@ -153,6 +177,7 @@ class LLMFactory:
         'openrouter': OpenAILLM,  # Same as OpenAI but with different base_url
         'huggingface_pipeline': HuggingFacePipelineLLM,
         'huggingface_endpoint': HuggingFaceEndpointLLM,
+        'mistralai': MistralAILLM,
     }
     
     @classmethod

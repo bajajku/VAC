@@ -3,8 +3,6 @@ from typing import Annotated
 from typing_extensions import TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from tools.retriever_tool import RetrieverTool
-from scripts.data_collection import JsonParser
 
 '''
     So this step ensures that AI agent manages its state (so it knows what to do next)
