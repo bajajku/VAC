@@ -1,6 +1,6 @@
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from scripts.data_collection.json_parser import JsonParser
 
 '''
