@@ -232,7 +232,7 @@ class LLM:
         Initialize the LLM with a specific provider.
         
         Args:
-            provider (str): The LLM provider ('openai', 'openrouter', 'huggingface_pipeline', 'huggingface_endpoint')
+            provider (str): The LLM provider ('openai', 'openrouter', 'huggingface_pipeline', 'huggingface_endpoint', 'mistralai', 'chatopenai')
             model_name (str): The model identifier
             **kwargs: Additional configuration parameters specific to the provider
         """
