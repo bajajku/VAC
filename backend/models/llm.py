@@ -238,6 +238,7 @@ class LLM:
         """
         self.provider = provider
         self.model_name = model_name
+        
         self.llm = LLMFactory.create_llm(provider, model_name, **kwargs)
     
     def create_chat(self):

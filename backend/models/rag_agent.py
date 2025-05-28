@@ -13,7 +13,7 @@ class RAGAgent:
     Handles user queries by first retrieving relevant information and then generating responses.
     """
     
-    def __init__(self, llm: LLM):
+    def __init__(self, llm: LLM, **kwargs):
         self.llm = llm.create_chat()
         self.tools = [retrieve_information]
         self.llm_with_tools = self.llm.bind_tools(self.tools)

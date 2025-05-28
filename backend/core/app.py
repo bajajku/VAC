@@ -45,7 +45,7 @@ class RAGApplication:
         llm_model: str = "gpt-3.5-turbo",
         persist_directory: str = "./chroma_db",
         collection_name: str = "rag_collection",
-        **llm_kwargs
+        **kwargs
     ):
         """
         Initialize the RAG application with vector database and LLM.
@@ -56,7 +56,7 @@ class RAGApplication:
             llm_model: LLM model name
             persist_directory: Directory to persist vector database
             collection_name: Name for the vector database collection
-            **llm_kwargs: Additional LLM configuration (api_key, temperature, etc.)
+            **kwargs: Additional configuration (api_key, temperature, prompt, etc.)
         """
         print("🚀 Initializing RAG Application...")
         
@@ -74,19 +74,19 @@ class RAGApplication:
         print("🔍 Setting up retriever...")
         global_retriever.initialize(self.vector_db)
         
-        # Initialize RAG agent
-        print(f"🤖 Setting up RAG agent with {llm_provider}/{llm_model}...")
-        # self.rag_agent = create_rag_agent(
-        #     provider=llm_provider,
-        #     model_name=llm_model,
-        #     **llm_kwargs
-        # )
+        # Separate LLM kwargs from RAG application kwargs
+        llm_kwargs = {k: v for k, v in kwargs.items() if k not in ['prompt']}
+        rag_kwargs = {k: v for k, v in kwargs.items() if k in ['prompt']}
+        
+        # Initialize LLM
+        print(f"🤖 Setting up LLM with {llm_provider}/{llm_model}...")
         self.llm = LLM(provider=llm_provider, model_name=llm_model, **llm_kwargs)
 
+        # Initialize RAG application
         self.rag_application = RAGApplicationFactory.create_app(
             app_type=app_type,
             llm=self.llm,
-            # **llm_kwargs
+            **rag_kwargs
         )
         
         self.is_initialized = True
