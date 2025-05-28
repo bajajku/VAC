@@ -5,6 +5,7 @@ from models.state import State
 '''
 Place holder for the custom agent.
 '''
+# TODO: Make this a class a interface for the agent, to be implemented by the RAGAgent.
 
 def Agent(
     *,
