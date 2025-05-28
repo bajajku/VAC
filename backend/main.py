@@ -12,7 +12,7 @@ sys.path.insert(0, str(backend_dir))
 
 from core.app import RAGApplication
 
-def demo_rag_system():
+def demo_rag_agent_system():
     """Demonstrate the RAG system with sample data."""
     
     # Initialize the RAG application
@@ -20,6 +20,7 @@ def demo_rag_system():
     
     # Example configuration - you'll need to provide your API key
     config = {
+        "app_type": "rag_agent",
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "llm_provider": "chatopenai",  # or "openrouter" for open source models
         "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
@@ -143,7 +144,7 @@ def main():
     choice = input("\nEnter your choice (1-3): ").strip()
     
     if choice == "1":
-        demo_rag_system()
+        demo_rag_agent_system()
     elif choice == "2":
         test_components()
     elif choice == "3":

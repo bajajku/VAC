@@ -1,9 +1,28 @@
 import os
+from abc import ABC, abstractmethod
 from typing import Optional
 from models.vector_database import VectorDatabase
 from models.rag_agent import RAGAgent, create_rag_agent
 from utils.retriever import global_retriever
 from scripts.data_collection.json_parser import JsonParser
+from models.rag_chain import RAGChain
+from models.llm import LLM
+class BaseRAGApplication(ABC):
+    def __init__(self):
+        self.llm: Optional[LLM] = None
+        self.vector_db: Optional[VectorDatabase] = None
+        self.rag_application = None
+        self.is_initialized = False
+    
+    @abstractmethod
+    def initialize(self, **kwargs):
+        pass
+    def load_data_from_json(self, json_file_path: str) -> int:
+        pass
+    
+    def add_documents_from_text(self, texts: list[str], metadatas: list[dict] = None):
+        pass
+    
 
 class RAGApplication:
     """
@@ -11,13 +30,16 @@ class RAGApplication:
     Handles initialization, configuration, and provides a unified interface.
     """
     
+
     def __init__(self):
+        self.llm: Optional[LLM] = None
         self.vector_db: Optional[VectorDatabase] = None
-        self.rag_agent: Optional[RAGAgent] = None
+        self.rag_application = None
         self.is_initialized = False
     
     def initialize(
         self,
+        app_type: str,
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         llm_provider: str = "openai",
         llm_model: str = "gpt-3.5-turbo",
@@ -54,10 +76,17 @@ class RAGApplication:
         
         # Initialize RAG agent
         print(f"🤖 Setting up RAG agent with {llm_provider}/{llm_model}...")
-        self.rag_agent = create_rag_agent(
-            provider=llm_provider,
-            model_name=llm_model,
-            **llm_kwargs
+        # self.rag_agent = create_rag_agent(
+        #     provider=llm_provider,
+        #     model_name=llm_model,
+        #     **llm_kwargs
+        # )
+        self.llm = LLM(provider=llm_provider, model_name=llm_model, **llm_kwargs)
+
+        self.rag_application = RAGApplicationFactory.create_app(
+            app_type=app_type,
+            llm=self.llm,
+            # **llm_kwargs
         )
         
         self.is_initialized = True
@@ -118,21 +147,21 @@ class RAGApplication:
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return self.rag_agent.invoke(question)
+        return self.rag_application.invoke(question)
     
     async def aquery(self, question: str) -> str:
         """Async version of query."""
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return await self.rag_agent.ainvoke(question)
+        return await self.rag_application.ainvoke(question)
     
     def stream_query(self, question: str):
         """Stream the response to a query."""
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return self.rag_agent.stream(question)
+        return self.rag_application.stream(question)
     
     def search_documents(self, query: str, k: int = 4):
         """
@@ -169,6 +198,19 @@ class RAGApplication:
             "vector_db_type": "chroma"
         }
 
+class RAGApplicationFactory:
+
+    _implementations = {
+        "rag_agent": RAGAgent,
+        "rag_chain": RAGChain,
+    }
+
+    @classmethod
+    def create_app(cls, app_type: str, llm: LLM, **kwargs) -> RAGApplication:
+        if app_type not in cls._implementations:
+            raise ValueError(f"Invalid app type: {app_type}")
+        rag_application = cls._implementations[app_type]
+        return rag_application(llm, **kwargs)
 
 # Global application instance
 app = RAGApplication()
