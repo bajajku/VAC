@@ -3,15 +3,16 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from models.llm import LLM
 from langchain.schema import BaseRetriever
 from utils.prompt import Prompt
-    
+from utils.retriever import global_retriever
+
 class RAGChain:
-    def __init__(self, llm: LLM, retriever: BaseRetriever, prompt: Prompt):
-        self.retriever = retriever
+    def __init__(self, llm: LLM, **kwargs):
+        self.retriever = global_retriever._retriever.retriever
         self.llm = llm.create_chat()
-        self.chain = self.create_chain()
+        self.prompt = kwargs.get("prompt")
         self.doc_chain = self.create_doc_chain()
         self.rag_chain = self.create_rag_chain()
-        self.prompt = prompt
+        self.chain = self.create_chain()
     
     def create_chain(self, chain_type: str = "rag"):
         match chain_type:
@@ -28,3 +29,12 @@ class RAGChain:
             retriever=self.retriever,
             combine_docs_chain=self.doc_chain,
         )
+    
+    def invoke(self, question: str) -> str:
+        return self.rag_chain.invoke({"input": question})
+    
+    def ainvoke(self, question: str) -> str:
+        return self.rag_chain.ainvoke({"input": question})
+    
+    def stream(self, question: str) -> str:
+        return self.rag_chain.stream({"input": question})
