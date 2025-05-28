@@ -168,7 +168,21 @@ class MistralAILLM(BaseLLM):
                                 max_retries=3)
         return model
 
-        
+class ChatOpenAILLM(BaseLLM):
+    """ChatOpenAI implementation."""
+    
+    def __init__(self, model_name: str, api_key: str = None, **kwargs):
+        self.api_key = api_key
+        super().__init__(model_name, **kwargs)
+
+    def create_llm(self):
+        return ChatOpenAI(
+            base_url=self.config['base_url'] if 'base_url' in self.config else "https://api.together.xyz/v1",
+            model=self.model_name,
+            api_key=self.api_key,
+            **{k: v for k, v in self.config.items() if k != 'model'}
+        )
+
 class LLMFactory:
     """Factory class to create different LLM implementations."""
     
@@ -178,6 +192,7 @@ class LLMFactory:
         'huggingface_pipeline': HuggingFacePipelineLLM,
         'huggingface_endpoint': HuggingFaceEndpointLLM,
         'mistralai': MistralAILLM,
+        'chatopenai': ChatOpenAILLM,
     }
     
     @classmethod
