@@ -1,8 +1,12 @@
 import os
 import sys
 from pathlib import Path
-import getpass
+
+from dotenv import load_dotenv
+load_dotenv('.env')
 # Add the backend directory to the Python path
+TOGETHER_API_KEY = os.environ['TOGETHER_API_KEY']
+
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
@@ -17,11 +21,11 @@ def demo_rag_system():
     # Example configuration - you'll need to provide your API key
     config = {
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-        "llm_provider": "mistralai",  # or "openrouter" for open source models
-        "llm_model": "mistral-large-2411",
+        "llm_provider": "chatopenai",  # or "openrouter" for open source models
+        "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
         "persist_directory": "./chroma_db",
         "collection_name": "demo_collection",
-        # "api_key": "your-api-key-here"  # Uncomment and add your API key
+        "api_key": TOGETHER_API_KEY  # Uncomment and add your API key
     }
     
     try:

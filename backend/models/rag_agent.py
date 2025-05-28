@@ -6,7 +6,7 @@ from langgraph.prebuilt import ToolNode
 from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
-
+from utils.graph_image import GraphImage
 class RAGAgent:
     """
     A RAG (Retrieval-Augmented Generation) agent using langgraph.
@@ -41,7 +41,9 @@ class RAGAgent:
         )
         workflow.add_edge("tools", "agent")
         
-        return workflow.compile()
+        graph = workflow.compile()
+        GraphImage.create_graph_image(graph)
+        return graph
     
     def _call_model(self, state: State):
         """Call the LLM with the current state."""
