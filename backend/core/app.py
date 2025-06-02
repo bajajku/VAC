@@ -163,6 +163,13 @@ class RAGApplication:
         
         return self.rag_application.stream(question)
     
+    async def astream_query(self, question: str):
+        """Async version of stream_query."""
+        if not self.is_initialized:
+            raise ValueError("Application not initialized. Call initialize() first.")
+        
+        return await self.rag_application.astream(question)
+    
     def search_documents(self, query: str, k: int = 4):
         """
         Search for relevant documents without generating a response.

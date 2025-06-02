@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 @dataclass
 class LLMConfig:
     """Configuration for LLM providers."""
+    app_type: str = "rag_agent"
     provider: str = "openai"
     model: str = "gpt-3.5-turbo"
     api_key: Optional[str] = None
@@ -37,12 +38,21 @@ class Settings:
     
     def _load_config(self) -> RAGConfig:
         """Load configuration from environment variables and defaults."""
-        
+    #     config = {
+    #     "app_type": "rag_agent",
+    #     "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    #     "llm_provider": "chatopenai",  # or "openrouter" for open source models
+    #     "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+    #     "persist_directory": "./chroma_db",
+    #     "collection_name": "demo_collection",
+    #     "api_key": TOGETHER_API_KEY  # Uncomment and add your API key
+    # }
         # LLM Configuration
         llm_config = LLMConfig(
-            provider=os.getenv("LLM_PROVIDER", "openai"),
-            model=os.getenv("LLM_MODEL", "gpt-3.5-turbo"),
-            api_key=os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"),
+            app_type = "rag_agent",
+            provider=os.getenv("LLM_PROVIDER", "chatopenai"),
+            model=os.getenv("LLM_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"),
+            api_key=os.getenv("TOGETHER_API_KEY"),
             base_url=os.getenv("LLM_BASE_URL"),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "0")) or None,

@@ -113,6 +113,17 @@ class RAGAgent:
                 if isinstance(message, AIMessage) and message.content:
                     yield message.content
 
+    async def astream(self, user_input: str):
+        """Async version of stream."""
+        initial_state = {
+            "messages": [HumanMessage(content=user_input)]
+        }
+
+        async for chunk in self.graph.astream(initial_state):
+            if "agent" in chunk and "messages" in chunk["agent"]:
+                message = chunk["agent"]["messages"][-1]
+                if isinstance(message, AIMessage) and message.content:
+                    yield message.content
 
 # Example usage and testing functions
 def create_rag_agent(provider: str = "openai", model_name: str = "gpt-3.5-turbo", **kwargs) -> RAGAgent:
