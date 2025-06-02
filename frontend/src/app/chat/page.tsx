@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 
+const BASE_URL = "http://localhost:8000"
 const ChatPage = () => {
   const [messages, setMessages] = useState([
     {
@@ -40,20 +41,19 @@ const ChatPage = () => {
     setIsTyping(true);
 
     // Simulate bot response
-    setTimeout(() => {
-      const botResponses = [
-        "That's an interesting question! Let me think about that for you.",
-        "I understand what you're asking. Here's what I think...",
-        "Great point! I'd be happy to help you with that.",
-        "Thanks for sharing that with me. Let me provide some insights.",
-        "I see what you mean. Here's my perspective on this topic."
-      ];
-      
-      const randomResponse = botResponses[Math.floor(Math.random() * botResponses.length)];
-      
+    setTimeout(async () => {
+      const response = await fetch(`${BASE_URL}/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ question: inputText })
+      });
+
+      const data = await response.json();
       const botMessage = {
         id: Date.now() + 1,
-        text: randomResponse,
+        text: data.answer,
         sender: 'bot',
         timestamp: new Date()
       };
