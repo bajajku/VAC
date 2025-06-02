@@ -106,12 +106,19 @@ class RAGAgent:
         initial_state = {
             "messages": [HumanMessage(content=user_input)]
         }
-        
-        for chunk in self.graph.stream(initial_state):
-            if "agent" in chunk and "messages" in chunk["agent"]:
-                message = chunk["agent"]["messages"][-1]
-                if isinstance(message, AIMessage) and message.content:
-                    yield message.content
+        # for message_chunk, metadata in graph.stream( 
+        #     {"topic": "ice cream"},
+        #     stream_mode="messages",
+        # ):
+        #     if message_chunk.content:
+        #         print(message_chunk.content, end="|", flush=True)
+
+        for chunk, metadata in self.graph.stream(initial_state, stream_mode="messages"):
+
+            if isinstance(chunk, AIMessage):
+                if chunk.content:
+                    print(chunk.content)
+                    yield chunk.content
 
     async def astream(self, user_input: str):
         """Async version of stream."""

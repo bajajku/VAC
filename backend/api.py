@@ -153,13 +153,18 @@ async def query_rag(request: QueryRequest):
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 # TODO: Implement streaming response
-# @app_api.post("/stream_async")
-# async def stream_query(request: QueryRequest):
-#     """Stream the response to a query."""
-#     if not is_initialized:
-#         raise HTTPException(status_code=503, detail="RAG system not initialized")
+@app_api.post("/stream_async")
+async def stream_query(request: QueryRequest):
+    """Stream the response to a query."""
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="RAG system not initialized")
     
-#     return await StreamingResponse(rag_app.astream_query(request.question), media_type="text/event-stream")
+    def event_stream():
+        for chunk in rag_app.stream_query(request.question):
+            yield chunk
+            # Or: yield f"data: {chunk}\n\n"  # If using SSE
+
+    return StreamingResponse(event_stream(), media_type="text/plain")
 
 
 @app_api.post("/documents")
