@@ -26,42 +26,101 @@ const ChatPage = () => {
   }, [messages]);
 
   const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+  e.preventDefault();
+  if (!inputText.trim()) return;
 
-    const userMessage = {
-      id: Date.now(),
-      text: inputText,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
-    setIsTyping(true);
-
-    // Simulate bot response
-    setTimeout(async () => {
-      const response = await fetch(`${BASE_URL}/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ question: inputText })
-      });
-
-      const data = await response.json();
-      const botMessage = {
-        id: Date.now() + 1,
-        text: data.answer,
-        sender: 'bot',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, botMessage]);
-      setIsTyping(false);
-    }, 1500);
+  const userMessage = {
+    id: Date.now(),
+    text: inputText,
+    sender: 'user',
+    timestamp: new Date()
   };
+
+  setMessages(prev => [...prev, userMessage]);
+  setInputText('');
+  setIsTyping(true);
+
+  const response = await fetch(`${BASE_URL}/stream_async`, {  // Adjust your endpoint here
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ question: inputText })
+  });
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let fullText = '';
+  
+  if (reader) {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+  
+      const chunk = decoder.decode(value);
+      console.log('Raw chunk:', chunk);  // Debug: you'll see "data: xxx\n\n"
+  
+      // Remove "data: " prefix
+      const cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
+      fullText += cleanChunk;
+  
+      // Update UI progressively
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.sender === 'bot') {
+          return [...prev.slice(0, -1), { ...last, text: fullText }];
+        } else {
+          return [...prev, {
+            id: Date.now() + 1,
+            text: fullText,
+            sender: 'bot',
+            timestamp: new Date()
+          }];
+        }
+      });
+    }
+  }  
+  setIsTyping(false);
+};
+
+
+//   const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+//     e.preventDefault();
+//     if (!inputText.trim()) return;
+
+//     const userMessage = {
+//       id: Date.now(),
+//       text: inputText,
+//       sender: 'user',
+//       timestamp: new Date()
+//     };
+
+//     setMessages(prev => [...prev, userMessage]);
+//     setInputText('');
+//     setIsTyping(true);
+
+//     // Simulate bot response
+//     setTimeout(async () => {
+//       const response = await fetch(`${BASE_URL}/stream_async`, {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json'
+//         },
+//         body: JSON.stringify({ question: inputText })
+//       });
+
+//       const data = await response.json();
+//       const botMessage = {
+//         id: Date.now() + 1,
+//         text: data.answer,
+//         sender: 'bot',
+//         timestamp: new Date()
+//       };
+
+//       setMessages(prev => [...prev, botMessage]);
+//       setIsTyping(false);
+//     }, 1500);
+//   };
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

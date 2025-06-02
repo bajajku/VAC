@@ -161,10 +161,10 @@ async def stream_query(request: QueryRequest):
     
     def event_stream():
         for chunk in rag_app.stream_query(request.question):
-            yield chunk
-            # Or: yield f"data: {chunk}\n\n"  # If using SSE
+            # yield chunk
+            yield f"data: {chunk}\n\n"  # If using SSE
 
-    return StreamingResponse(event_stream(), media_type="text/plain")
+    return StreamingResponse(event_stream(), media_type="text/event-stream")    
 
 
 @app_api.post("/documents")
