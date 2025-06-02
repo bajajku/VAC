@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 from utils.prompt import Prompt
+from scripts.data_cleaning.data_cleaner import DataCleaner
+import json
 
 from dotenv import load_dotenv
 load_dotenv('.env')
@@ -196,7 +198,12 @@ def demo_rag_chain_system():
         print("2. Check your internet connection")
         print("3. Verify all dependencies are installed")
     
-    
+def test_data_cleaning():
+    """Test the data cleaning process."""
+    data_cleaner = DataCleaner(unclean_data=json.load(open('scripts/data_collection/crawl_results/crawl_results_20250526_133954.json')))
+    data_cleaner.clean_data()
+    data_cleaner.save_cleaned_documents('data/cleaned_data.json')
+    print(data_cleaner.get_statistics())
 
 def test_components():
     """Test individual components of the RAG system."""
@@ -238,9 +245,10 @@ def main():
     print("1. Run full demo")
     print("2. Run RAG Chain demo")
     print("3. Test components only")
-    print("4. Exit")
+    print("4. Test data cleaning")
+    print("5. Exit")
     
-    choice = input("\nEnter your choice (1-4): ").strip()
+    choice = input("\nEnter your choice (1-5): ").strip()
     
     if choice == "1":
         demo_rag_agent_system()
@@ -249,6 +257,8 @@ def main():
     elif choice == "3":
         test_components()
     elif choice == "4":
+        test_data_cleaning()
+    elif choice == "5":
         print("Goodbye!")
     else:
         print("Invalid choice. Please run again.")

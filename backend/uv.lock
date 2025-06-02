@@ -138,6 +138,7 @@ dependencies = [
     { name = "langsmith" },
     { name = "python-multipart" },
     { name = "requests" },
+    { name = "tqdm" },
     { name = "uvicorn" },
 ]
 
@@ -156,6 +157,7 @@ requires-dist = [
     { name = "langsmith", specifier = ">=0.3.42" },
     { name = "python-multipart", specifier = ">=0.0.6" },
     { name = "requests", specifier = ">=2.32.3" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "uvicorn", specifier = ">=0.24.0" },
 ]
 
