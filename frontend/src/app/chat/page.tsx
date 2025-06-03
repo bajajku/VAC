@@ -33,8 +33,8 @@ const ChatPage = () => {
     }
   }, []);
 
-  const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
+  const handleSendMessage = async (e?: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>) => {
+    e?.preventDefault();
     if (!inputText.trim()) return;
 
     const userMessage = {
@@ -206,7 +206,7 @@ const ChatPage = () => {
               />
             </div>
             <button
-              // onClick={handleSendMessage}
+              onClick={handleSendMessage}
               disabled={!inputText.trim() || isTyping}
               className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full flex items-center justify-center hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
             >
