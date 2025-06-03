@@ -20,4 +20,5 @@ dependencies = [
     "python-multipart>=0.0.6",
     "langchain-mistralai>=0.2.10",
     "tqdm>=4.67.1",
+    "git-filter-repo>=2.47.0",
 ]
