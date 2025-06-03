@@ -16,6 +16,7 @@ const ChatPage = () => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null) as any;
   const inputRef = useRef(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,102 +26,88 @@ const ChatPage = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-  e.preventDefault();
-  if (!inputText.trim()) return;
-
-  const userMessage = {
-    id: Date.now(),
-    text: inputText,
-    sender: 'user',
-    timestamp: new Date()
-  };
-
-  setMessages(prev => [...prev, userMessage]);
-  setInputText('');
-  setIsTyping(true);
-
-  const response = await fetch(`${BASE_URL}/stream_async`, {  // Adjust your endpoint here
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ question: inputText })
-  });
-
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let fullText = '';
-  
-  if (reader) {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-  
-      const chunk = decoder.decode(value);
-      console.log('Raw chunk:', chunk);  // Debug: you'll see "data: xxx\n\n"
-  
-      // Remove "data: " prefix
-      const cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
-      fullText += cleanChunk;
-  
-      // Update UI progressively
-      setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last && last.sender === 'bot') {
-          return [...prev.slice(0, -1), { ...last, text: fullText }];
-        } else {
-          return [...prev, {
-            id: Date.now() + 1,
-            text: fullText,
-            sender: 'bot',
-            timestamp: new Date()
-          }];
-        }
-      });
+  useEffect(() => {
+    const savedSessionId = localStorage.getItem('chatSessionId');
+    if (savedSessionId) {
+      setSessionId(savedSessionId);
     }
-  }  
-  setIsTyping(false);
-};
+  }, []);
 
+  const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (!inputText.trim()) return;
 
-//   const handleSendMessage = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-//     e.preventDefault();
-//     if (!inputText.trim()) return;
+    const userMessage = {
+      id: Date.now(),
+      text: inputText,
+      sender: 'user',
+      timestamp: new Date()
+    };
 
-//     const userMessage = {
-//       id: Date.now(),
-//       text: inputText,
-//       sender: 'user',
-//       timestamp: new Date()
-//     };
+    setMessages(prev => [...prev, userMessage]);
+    setInputText('');
+    setIsTyping(true);
 
-//     setMessages(prev => [...prev, userMessage]);
-//     setInputText('');
-//     setIsTyping(true);
+    const response = await fetch(`${BASE_URL}/stream_async`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        question: inputText,
+        session_id: sessionId
+      })
+    });
 
-//     // Simulate bot response
-//     setTimeout(async () => {
-//       const response = await fetch(`${BASE_URL}/stream_async`, {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json'
-//         },
-//         body: JSON.stringify({ question: inputText })
-//       });
-
-//       const data = await response.json();
-//       const botMessage = {
-//         id: Date.now() + 1,
-//         text: data.answer,
-//         sender: 'bot',
-//         timestamp: new Date()
-//       };
-
-//       setMessages(prev => [...prev, botMessage]);
-//       setIsTyping(false);
-//     }, 1500);
-//   };
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let fullText = '';
+    
+    if (reader) {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+    
+        const chunk = decoder.decode(value);
+        console.log('Raw chunk:', chunk);  // Debug: you'll see "data: xxx\n\n"
+    
+        // Remove "data: " prefix
+        let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
+        
+        // Extract and remove session_id BEFORE adding to fullText
+        if (cleanChunk.includes('[SESSION_ID]')) {
+          const sessionMatch = cleanChunk.match(/\[SESSION_ID\](.*?)\[\/SESSION_ID\]/);
+          if (sessionMatch && !sessionId) {
+            setSessionId(sessionMatch[1]);
+            localStorage.setItem('chatSessionId', sessionMatch[1]);
+          }
+          // Remove session ID from the chunk so it doesn't appear in chat
+          cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
+        }
+        
+        // Only add to fullText if there's actual content after removing session ID
+        if (cleanChunk.trim()) {
+          fullText += cleanChunk;
+        
+          // Update UI progressively only when there's actual content
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.sender === 'bot') {
+              return [...prev.slice(0, -1), { ...last, text: fullText }];
+            } else {
+              return [...prev, {
+                id: Date.now() + 1,
+                text: fullText,
+                sender: 'bot',
+                timestamp: new Date()
+              }];
+            }
+          });
+        }
+      }
+    }  
+    setIsTyping(false);
+  };
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

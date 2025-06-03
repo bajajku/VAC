@@ -9,12 +9,13 @@ from core.app import get_app
 from config.settings import get_settings
 import os
 from dotenv import load_dotenv
-
+from langchain_core.messages import HumanMessage, AIMessage
 load_dotenv()
 
 # Pydantic models for API
 class QueryRequest(BaseModel):
     question: str
+    session_id: Optional[str] = None
     k: Optional[int] = 4
 
 class QueryResponse(BaseModel):
@@ -52,6 +53,7 @@ is_initialized = False
 
 @app_api.on_event("startup")
 async def startup_event():
+    
     """Initialize the RAG system on startup."""
     global rag_app, is_initialized
     
@@ -84,6 +86,7 @@ async def startup_event():
         "persist_directory": "./chroma_db",
         "collection_name": "demo_collection",
         "api_key": TOGETHER_API_KEY  # Uncomment and add your API key
+        ,"chats_by_session_id": {}
         }
         rag_app.initialize(**config)
 
@@ -152,20 +155,29 @@ async def query_rag(request: QueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
-# TODO: Implement streaming response
 @app_api.post("/stream_async")
 async def stream_query(request: QueryRequest):
     """Stream the response to a query."""
     if not is_initialized:
         raise HTTPException(status_code=503, detail="RAG system not initialized")
     
+    # Generate session_id if not provided
+    session_id = request.session_id
+    if not session_id:
+        import uuid
+        session_id = str(uuid.uuid4())
+    
     def event_stream():
-        for chunk in rag_app.stream_query(request.question):
-            # yield chunk
-            yield f"data: {chunk}\n\n"  # If using SSE
+        # Send session_id first
+        yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
+        
+        # Stream the response with session support
+        for chunk in rag_app.stream_query(request.question, session_id):
+            # Only stream the final AI messages (not tool calls or intermediate messages)
+            if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
+                yield f"data: {chunk[0].content}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")    
-
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @app_api.post("/documents")
 async def add_documents(request: DocumentRequest):
@@ -225,4 +237,4 @@ async def get_stats():
 # For running with uvicorn
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app_api, host="0.0.0.0", port=8000) 
+    uvicorn.run(app_api, host="0.0.0.0", port=8000, reload=True) 

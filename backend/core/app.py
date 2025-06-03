@@ -7,6 +7,8 @@ from utils.retriever import global_retriever
 from scripts.data_collection.json_parser import JsonParser
 from models.rag_chain import RAGChain
 from models.llm import LLM
+from langchain.schema import HumanMessage
+
 class BaseRAGApplication(ABC):
     def __init__(self):
         self.llm: Optional[LLM] = None
@@ -75,8 +77,8 @@ class RAGApplication:
         global_retriever.initialize(self.vector_db)
         
         # Separate LLM kwargs from RAG application kwargs
-        llm_kwargs = {k: v for k, v in kwargs.items() if k not in ['prompt']}
-        rag_kwargs = {k: v for k, v in kwargs.items() if k in ['prompt']}
+        llm_kwargs = {k: v for k, v in kwargs.items() if k not in ['prompt', 'chats_by_session_id']}
+        rag_kwargs = {k: v for k, v in kwargs.items() if k in ['prompt', 'chats_by_session_id']}
         
         # Initialize LLM
         print(f"🤖 Setting up LLM with {llm_provider}/{llm_model}...")
@@ -156,12 +158,24 @@ class RAGApplication:
         
         return await self.rag_application.ainvoke(question)
     
-    def stream_query(self, question: str):
-        """Stream the response to a query."""
+    def stream_query(self, question: str, session_id: str = None):
+        """Stream the response to a query with session support."""
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return self.rag_application.stream(question)
+        # Generate session_id if not provided
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+        
+        # Create config with session_id
+        config = {"configurable": {"session_id": session_id}}
+        
+        # Create initial state
+        initial_state = {"messages": [HumanMessage(content=question)]}
+        
+        # Stream with session config
+        return self.rag_application.graph.stream(initial_state, config=config, stream_mode="messages")
     
     async def astream_query(self, question: str):
         """Async version of stream_query."""

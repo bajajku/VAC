@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
+from backend.models.chat_session import ChatSessionManager
 from core.app import get_app
 from config.settings import get_settings
 
@@ -43,13 +44,14 @@ app_api.add_middleware(
 # Global variables
 rag_app = None
 is_initialized = False
-
+chat_session_manager = None
 @app_api.on_event("startup")
 async def startup_event():
     """Initialize the RAG system on startup."""
-    global rag_app, is_initialized
+    global rag_app, is_initialized, chat_session_manager
     
     try:
+        chat_session_manager = ChatSessionManager()
         rag_app = get_app()
         settings = get_settings()
         

@@ -7,6 +7,8 @@ from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
+from langchain_core.runnables import RunnableConfig
+from utils.helper import get_chat_history
 class RAGAgent:
     """
     A RAG (Retrieval-Augmented Generation) agent using langgraph.
@@ -18,6 +20,7 @@ class RAGAgent:
         self.tools = [retrieve_information]
         self.llm_with_tools = self.llm.bind_tools(self.tools)
         self.graph = self._build_graph()
+        self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
     
     def _build_graph(self) -> StateGraph:
         """Build the langgraph state graph for the RAG agent."""
@@ -45,11 +48,72 @@ class RAGAgent:
         GraphImage.create_graph_image(graph)
         return graph
     
-    def _call_model(self, state: State):
+    # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
+    def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
-        messages = state["messages"]
+
+        if "configurable" not in config or "session_id" not in config["configurable"]:
+            raise ValueError(
+                "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
+            )
+
+        session_id = config["configurable"]["session_id"]
+        
+        # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
+        recent_history = self._get_recent_clean_history(session_id, max_messages=6)
+        
+        # Combine with current state
+        messages = recent_history + state["messages"]
+        
+        print(f"📜 Chat history: {[msg.content[:50] for msg in recent_history]}")  # Debug
+        print(f"📝 Total messages: {len(messages)}")  # Debug
+        
         response = self.llm_with_tools.invoke(messages)
+        
+        # Store clean exchange
+        self._store_clean_exchange(session_id, state["messages"], response)
+
         return {"messages": [response]}
+
+    def _get_recent_clean_history(self, session_id: str, max_messages: int = 6):
+        """Get recent conversation history (for personal context)."""
+        if session_id not in self.chats_by_session_id:
+            return []
+        
+        chat_history = self.chats_by_session_id[session_id]
+        clean_messages = []
+        
+        # Get clean conversation messages only
+        for msg in chat_history.messages:
+            if isinstance(msg, HumanMessage):
+                clean_messages.append(msg)
+            elif isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
+                # Create clean AI message
+                clean_messages.append(AIMessage(content=msg.content))
+        
+        return clean_messages[-max_messages:]
+
+    def _store_clean_exchange(self, session_id: str, user_messages, ai_response):
+        """Store clean conversation exchange."""
+        if not ai_response.content or ai_response.tool_calls:
+            return
+        
+        if session_id not in self.chats_by_session_id:
+            from langchain_core.chat_history import InMemoryChatMessageHistory
+            self.chats_by_session_id[session_id] = InMemoryChatMessageHistory()
+        
+        chat_history = self.chats_by_session_id[session_id]
+        
+        # Store user message and AI response
+        for msg in user_messages:
+            if isinstance(msg, HumanMessage):
+                chat_history.add_message(msg)
+                chat_history.add_message(AIMessage(content=ai_response.content))
+                break
+        
+        # Limit history size (keep last 8 messages = 4 exchanges)
+        if len(chat_history.messages) > 8:
+            chat_history.messages = chat_history.messages[-8:]
     
     def _should_continue(self, state: State) -> Literal["continue", "end"]:
         """Determine whether to continue to tools or end the conversation."""

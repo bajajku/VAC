@@ -3,7 +3,7 @@ from langchain_core.runnables import RunnableLambda
 from langgraph.prebuilt import ToolNode
 from models.tools.retriever_tool import retrieve_information
 from models.state import State
-
+from langchain_core.chat_history import InMemoryChatMessageHistory
 '''
     Helper functions to handle tool errors and execute tools.
 '''
@@ -76,3 +76,17 @@ def execute_tools(state: State):
 def tool_exists(state: State):
     result = state['messages'][-1]
     return len(result.tool_calls) > 0
+
+def get_chat_history(session_id: str, chats_by_session_id: dict, max_tokens: int = 4000) -> InMemoryChatMessageHistory:
+    """Get chat history with token limit."""
+    chat_history = chats_by_session_id.get(session_id)
+    if chat_history is None:
+        chat_history = InMemoryChatMessageHistory()
+        chats_by_session_id[session_id] = chat_history
+    
+    # Truncate if too many tokens
+    if len(chat_history.messages) > 20:  # Simple heuristic
+        # Keep only recent messages
+        chat_history.messages = chat_history.messages[-20:]
+    
+    return chat_history
