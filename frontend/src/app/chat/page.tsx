@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 
-const BASE_URL = "http://localhost:8000"
+const BASE_URL = " https://5d8d-142-55-230-114.ngrok-free.app"
 const ChatPage = () => {
   const [messages, setMessages] = useState([
     {
