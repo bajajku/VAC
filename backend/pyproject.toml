@@ -22,3 +22,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "git-filter-repo>=2.47.0",
 ]
+
+# Add this section to specify which directories are packages
+[tool.setuptools.packages.find]
+include = ["api*", "core*", "config*", "models*", "services*", "utils*"]
+exclude = ["data*", "images*", "shell_scripts*", "chroma_db*", "scripts*", "tests*", "examples*"]
