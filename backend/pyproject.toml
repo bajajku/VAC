@@ -21,6 +21,7 @@ dependencies = [
     "langchain-mistralai>=0.2.10",
     "tqdm>=4.67.1",
     "git-filter-repo>=2.47.0",
+    "rank-bm25>=0.2.2",
 ]
 
 # Add this section to specify which directories are packages
