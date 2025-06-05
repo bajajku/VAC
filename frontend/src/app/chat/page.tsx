@@ -4,7 +4,7 @@ import { Send, Bot, User, Sparkles } from 'lucide-react';
 import dotenv from 'dotenv';
 
 dotenv.config();
-const BASE_URL = "https://a1c1-142-55-230-114.ngrok-free.app";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const ChatPage = () => {
   const [messages, setMessages] = useState([
     {
