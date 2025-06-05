@@ -1,5 +1,5 @@
 from typing import Literal
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
@@ -62,11 +62,26 @@ class RAGAgent:
         # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
         recent_history = self._get_recent_clean_history(session_id, max_messages=6)
         
-        # Combine with current state
-        messages = recent_history + state["messages"]
+        # 🎯 ADD SYSTEM PROMPT HERE
+        system_prompt = SystemMessage(content="""
+        You are a trauma-informed, empathetic mental health assistant designed to support military personnel and veterans. 
+
+        When interacting with users:
+        1. Always prioritize empathy, active listening, and emotional validation.
+        2. Use retrieved information from trusted trauma-informed and military-specific resources to guide your responses.
+        3. If you do not have enough information or if a question is out of scope (e.g., medical diagnosis, legal advice), gently inform the user and encourage seeking professional help.
+        4. Never speculate, fabricate information, or provide unsafe or triggering content.
+        5. Always use gender-neutral, inclusive, and respectful language.
+        6. Avoid re-traumatization: do not probe for explicit trauma details unless the user voluntarily offers them, and then respond with sensitivity.
+        7. When appropriate, suggest mindfulness, grounding techniques, or trusted support resources.
+        8. If signs of severe distress, self-harm, or crisis appear, follow escalation protocol and recommend contacting a qualified professional or emergency service.
+        9. Be clear, compassionate, and concise. Always prioritize the user’s emotional safety and privacy.
+
+        You are here to support — not to replace professional therapy.
+        """)
         
-        # print(f"📜 Chat history: {[msg.content[:50] for msg in recent_history]}")  # Debug
-        # print(f"📝 Total messages: {len(messages)}")  # Debug
+        # Combine with current state (system prompt first)
+        messages = [system_prompt] + recent_history + state["messages"]
         
         response = self.llm_with_tools.invoke(messages)
         
