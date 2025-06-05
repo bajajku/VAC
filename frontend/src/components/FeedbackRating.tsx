@@ -106,7 +106,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
     setSubmitted(true);
   };
 
-  const updateFeedback = (field: keyof FeedbackData, value: React.SetStateAction<Partial<FeedbackData>> | any | null) => {
+  const updateFeedback = (field: keyof FeedbackData, value: unknown) => {
     setFeedback(prev => ({ ...prev, [field]: value }));
   };
 
