@@ -65,8 +65,8 @@ class RAGAgent:
         # Combine with current state
         messages = recent_history + state["messages"]
         
-        print(f"📜 Chat history: {[msg.content[:50] for msg in recent_history]}")  # Debug
-        print(f"📝 Total messages: {len(messages)}")  # Debug
+        # print(f"📜 Chat history: {[msg.content[:50] for msg in recent_history]}")  # Debug
+        # print(f"📝 Total messages: {len(messages)}")  # Debug
         
         response = self.llm_with_tools.invoke(messages)
         

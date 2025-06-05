@@ -111,9 +111,11 @@ class FeedbackService {
       const localFeedback = this.getLocalFeedback();
       return this.calculateLocalStats(localFeedback);
     } catch (error) {
+      console.error('Error fetching feedback stats:', error);
       // Fallback to local analysis
       const localFeedback = this.getLocalFeedback();
       return this.calculateLocalStats(localFeedback);
+      
     }
   }
 
@@ -163,6 +165,7 @@ class FeedbackService {
       
       return this.getLocalFeedback();
     } catch (error) {
+      console.error('Error exporting feedback:', error);
       return this.getLocalFeedback();
     }
   }
