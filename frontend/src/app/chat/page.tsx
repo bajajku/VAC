@@ -2,11 +2,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles } from 'lucide-react';
 import dotenv from 'dotenv';
+import FeedbackRating from '../../components/FeedbackRating';
+import { feedbackService, FeedbackData } from '../../services/feedbackService';
 
 dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+type Message = {
+  id: number;
+  text: string;
+  sender: 'user' | 'bot';
+  timestamp: Date;
+  feedbackSubmitted?: boolean;
+};
+
 const ChatPage = () => {
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
       text: "Hello! I'm your AI assistant. How can I help you today?",
@@ -15,6 +26,8 @@ const ChatPage = () => {
     }
   ]);
   const [inputText, setInputText] = useState('');
+  const [lastQuestion, setLastQuestion] = useState('');
+  const [lastAnswer, setLastAnswer] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,7 +52,7 @@ const ChatPage = () => {
     e?.preventDefault();
     if (!inputText.trim()) return;
 
-    const userMessage = {
+    const userMessage: Message = {
       id: Date.now(),
       text: inputText,
       sender: 'user',
@@ -97,18 +110,40 @@ const ChatPage = () => {
             if (last && last.sender === 'bot') {
               return [...prev.slice(0, -1), { ...last, text: fullText }];
             } else {
-              return [...prev, {
+              const botMessage: Message = {
                 id: Date.now() + 1,
                 text: fullText,
                 sender: 'bot',
                 timestamp: new Date()
-              }];
+              };
+              return [...prev, botMessage];
             }
           });
         }
       }
-    }  
+    }
+    setLastQuestion(inputText);
+    setLastAnswer(fullText);
     setIsTyping(false);
+  };
+
+  const handleFeedbackSubmit = async (feedback: FeedbackData) => {
+    try {
+      const result = await feedbackService.submitFeedback(feedback);
+      if (result.success) {
+        // Mark the message as having feedback submitted
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id.toString() === feedback.responseId 
+              ? { ...msg, feedbackSubmitted: true }
+              : msg
+          )
+        );
+        console.log('Feedback submitted successfully:', result.id);
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+    }
   };
 
   const formatTime = (date: Date) => {
@@ -168,6 +203,24 @@ const ChatPage = () => {
               }`}>
                 {formatTime(message.timestamp)}
               </p>
+              
+              {/* Feedback Component for Bot Messages */}
+              {message.sender === 'bot' && !message.feedbackSubmitted && (
+                <FeedbackRating
+                  responseId={message.id.toString()}
+                  sessionId={sessionId || undefined}
+                  onSubmit={(data) => {
+                    handleFeedbackSubmit({
+                      ...data,
+                      questionAnswer: {
+                        question: lastQuestion,
+                        answer: lastAnswer
+                      }
+                    });
+                  }}
+                  compact={true}
+                />
+              )}
             </div>
           </div>
         ))}
