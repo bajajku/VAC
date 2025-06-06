@@ -115,7 +115,7 @@ export default function Home() {
             <p className="text-sm text-amber-800 text-center">
               <strong>Important:</strong> This AI assistant is a supportive tool and should not be used for crisis situations. 
               If you're experiencing a mental health emergency, please contact your local emergency services, 
-              the Veterans Crisis Line (1-800-273-8255), or speak with a healthcare professional immediately.
+              the Veterans Crisis Line (1-XXX-XXX-XXXX), or speak with a healthcare professional immediately.
             </p>
           </div>
         </div>
