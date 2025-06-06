@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fefefe;
+  --foreground: #1a1a1a;
+  
+  /* Trauma-informed color palette - calming, trustworthy */
+  --primary-blue: #2563eb;
+  --primary-navy: #1e3a8a;
+  --success-green: #059669;
+  --warm-gray: #6b7280;
+  --light-blue: #eff6ff;
+  --sage-green: #6ee7b7;
+  --warm-beige: #fef7ed;
+  --trust-navy: #0f172a;
 }
 
 @theme inline {
@@ -14,13 +24,32 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f172a;
+    --foreground: #f1f5f9;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+
+/* Accessibility improvements */
+*:focus {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+/* Smooth animations for trauma-informed design */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Better text rendering for readability */
+p, span, div {
+  font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: optimizeLegibility;
 }
