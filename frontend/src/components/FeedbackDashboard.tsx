@@ -1,28 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Star, ThumbsUp, ThumbsDown, MessageSquare, Trash2 } from 'lucide-react';
-import { feedbackService, FeedbackStorageItem } from '../services/feedbackService';
+'use client';
 
-type FeedbackStats = {
-  totalFeedback: number;
-  averageRatings: {
-    overall: number;
-    accuracy: number;
-    helpfulness: number;
-    clarity: number;
-  };
-  voteDistribution: {
-    likes: number;
-    dislikes: number;
-    neutral: number;
-  };
-};
+import React, { useState, useEffect } from 'react';
+import { Download, RefreshCw, Star, ThumbsUp, ThumbsDown, MessageSquare, Trash2, TrendingUp } from 'lucide-react';
+import { feedbackService, FeedbackStats, FeedbackResponse } from '../services/feedbackService';
 
 const FeedbackDashboard: React.FC = () => {
   const [stats, setStats] = useState<FeedbackStats | null>(null);
-  const [feedbackData, setFeedbackData] = useState<FeedbackStorageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'details'>('overview');
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
     loadFeedbackData();
@@ -30,42 +16,40 @@ const FeedbackDashboard: React.FC = () => {
 
   const loadFeedbackData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const [statsData, exportData] = await Promise.all([
-        feedbackService.getFeedbackStats(),
-        feedbackService.exportFeedback()
-      ]);
-      setStats(statsData);
-      setFeedbackData(exportData);
+      const result = await feedbackService.getFeedbackStats();
+      if (result.success && result.data) {
+        setStats(result.data);
+      } else {
+        setError(result.error || 'Failed to load feedback data');
+      }
     } catch (error) {
       console.error('Error loading feedback data:', error);
+      setError('Failed to load feedback data');
     } finally {
       setLoading(false);
     }
   };
 
   const exportToCSV = () => {
-    if (feedbackData.length === 0) return;
+    if (!stats || stats.recent_feedback.length === 0) return;
 
     const csvHeaders = [
-      'ID', 'Response ID', 'Session ID', 'Question', 'Answer', 'Overall Rating', 'Accuracy', 'Helpfulness', 
-      'Clarity', 'Vote', 'Comment', 'Expert Notes', 'Timestamp'
+      'ID', 'Session ID', 'Question', 'Answer', 'Feedback Type', 'Rating', 
+      'Comment', 'Created At', 'Updated At'
     ];
 
-    const csvData = feedbackData.map(item => [
+    const csvData = stats.recent_feedback.map(item => [
       item.id,
-      item.responseId,
-      item.sessionId || '',
-      `"${(item.questionAnswer?.question || '').replace(/"/g, '""')}"`,
-      `"${(item.questionAnswer?.answer || '').replace(/"/g, '""')}"`,
-      item.overallRating,
-      item.accuracy,
-      item.helpfulness,
-      item.clarity,
-      item.vote || '',
-      `"${item.comment.replace(/"/g, '""')}"`,
-      `"${item.expertNotes.replace(/"/g, '""')}"`,
-      item.timestamp
+      item.session_id,
+      `"${item.question.replace(/"/g, '""')}"`,
+      `"${item.answer.replace(/"/g, '""')}"`,
+      item.feedback_type,
+      item.rating || '',
+      `"${(item.feedback_text || '').replace(/"/g, '""')}"`,
+      item.created_at,
+      item.updated_at
     ]);
 
     const csvContent = [csvHeaders, ...csvData]
@@ -81,13 +65,14 @@ const FeedbackDashboard: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleClearFeedback = () => {
-    feedbackService.clearLocalFeedback();
-    setStats(null);
-    setFeedbackData([]);
-    setShowClearConfirm(false);
-    // Reload to show empty state
-    loadFeedbackData();
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
@@ -99,10 +84,32 @@ const FeedbackDashboard: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+        <button
+          onClick={loadFeedbackData}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
   if (!stats) {
     return (
       <div className="p-8 text-center">
         <p className="text-slate-600">No feedback data available</p>
+        <button
+          onClick={loadFeedbackData}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+        >
+          Refresh
+        </button>
       </div>
     );
   }
@@ -121,18 +128,11 @@ const FeedbackDashboard: React.FC = () => {
           </button>
           <button
             onClick={exportToCSV}
-            className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            disabled={stats.recent_feedback.length === 0}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
             <span>Export CSV</span>
-          </button>
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            disabled={feedbackData.length === 0}
-            className="flex items-center space-x-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Clear Data</span>
           </button>
         </div>
       </div>
@@ -157,182 +157,217 @@ const FeedbackDashboard: React.FC = () => {
               : 'text-slate-600 hover:text-slate-900'
           }`}
         >
-          Detailed Feedback
+          Recent Feedback
         </button>
       </div>
 
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
               <div className="flex items-center">
                 <MessageSquare className="w-8 h-8 text-blue-500" />
                 <div className="ml-4">
                   <p className="text-sm font-medium text-slate-600">Total Feedback</p>
-                  <p className="text-2xl font-bold text-slate-900">{stats.totalFeedback}</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.total_feedback}</p>
                 </div>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-              <div className="flex items-center">
-                <Star className="w-8 h-8 text-yellow-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Avg Overall Rating</p>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {stats.averageRatings.overall.toFixed(1)}/5
-                  </p>
-                </div>
-              </div>
-            </div>
+            
             <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
               <div className="flex items-center">
                 <ThumbsUp className="w-8 h-8 text-green-500" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Positive Votes</p>
-                  <p className="text-2xl font-bold text-slate-900">{stats.voteDistribution.likes}</p>
+                  <p className="text-sm font-medium text-slate-600">Positive</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.positive_count}</p>
                 </div>
               </div>
             </div>
+            
             <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
               <div className="flex items-center">
                 <ThumbsDown className="w-8 h-8 text-red-500" />
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-slate-600">Negative Votes</p>
-                  <p className="text-2xl font-bold text-slate-900">{stats.voteDistribution.dislikes}</p>
+                  <p className="text-sm font-medium text-slate-600">Negative</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.negative_count}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center">
+                <TrendingUp className="w-8 h-8 text-purple-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-slate-600">Suggestions</p>
+                  <p className="text-2xl font-bold text-slate-900">{stats.suggestion_count}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Simple Rating Bars (instead of charts) */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-            <h3 className="text-lg font-semibold mb-4">Average Ratings by Category</h3>
-            <div className="space-y-4">
-              {[
-                { label: 'Overall', value: stats.averageRatings.overall, color: 'bg-blue-500' },
-                { label: 'Accuracy', value: stats.averageRatings.accuracy, color: 'bg-green-500' },
-                { label: 'Helpfulness', value: stats.averageRatings.helpfulness, color: 'bg-yellow-500' },
-                { label: 'Clarity', value: stats.averageRatings.clarity, color: 'bg-red-500' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center space-x-4">
-                  <div className="w-20 text-sm font-medium text-slate-600">{item.label}</div>
-                  <div className="flex-1 bg-slate-200 rounded-full h-4 relative">
-                    <div
-                      className={`${item.color} h-4 rounded-full transition-all duration-300`}
-                      style={{ width: `${(item.value / 5) * 100}%` }}
-                    />
-                  </div>
-                  <div className="w-12 text-sm font-medium text-slate-900">
-                    {item.value.toFixed(1)}/5
+          {/* Average Rating */}
+          {stats.average_rating && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">Average Rating</h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-6 h-6 ${
+                            star <= Math.round(stats.average_rating!)
+                              ? 'text-yellow-400 fill-current'
+                              : 'text-gray-300'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-2xl font-bold text-slate-900">
+                      {stats.average_rating.toFixed(1)}/5
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
+            </div>
+          )}
+
+          {/* Feedback Distribution */}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Feedback Distribution</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Positive</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-500 h-2 rounded-full"
+                      style={{
+                        width: `${stats.total_feedback > 0 ? (stats.positive_count / stats.total_feedback) * 100 : 0}%`
+                      }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {stats.total_feedback > 0 ? Math.round((stats.positive_count / stats.total_feedback) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Negative</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-red-500 h-2 rounded-full"
+                      style={{
+                        width: `${stats.total_feedback > 0 ? (stats.negative_count / stats.total_feedback) * 100 : 0}%`
+                      }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {stats.total_feedback > 0 ? Math.round((stats.negative_count / stats.total_feedback) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Suggestions</span>
+                <div className="flex items-center space-x-2">
+                  <div className="w-32 bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-500 h-2 rounded-full"
+                      style={{
+                        width: `${stats.total_feedback > 0 ? (stats.suggestion_count / stats.total_feedback) * 100 : 0}%`
+                      }}
+                    ></div>
+                  </div>
+                  <span className="text-sm font-medium text-slate-900">
+                    {stats.total_feedback > 0 ? Math.round((stats.suggestion_count / stats.total_feedback) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {activeTab === 'details' && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-          <div className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Detailed Feedback ({feedbackData.length} items)</h3>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Timestamp
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Question & Answer
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Ratings
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Vote
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Comment
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                      Expert Notes
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-200">
-                  {feedbackData.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                        {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString()}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-900 max-w-sm">
-                        <div className="space-y-2">
-                          <div>
-                            <span className="font-medium text-slate-600">Q:</span>
-                            <p className="text-xs text-slate-800 truncate">
-                              {item.questionAnswer?.question || 'No question recorded'}
-                            </p>
-                          </div>
-                          <div>
-                            <span className="font-medium text-slate-600">A:</span>
-                            <p className="text-xs text-slate-800 truncate">
-                              {item.questionAnswer?.answer || 'No answer recorded'}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900">
-                        <div className="space-y-1">
-                          <div>Overall: {item.overallRating}/5</div>
-                          <div className="text-xs text-slate-500">
-                            A:{item.accuracy} H:{item.helpfulness} C:{item.clarity}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {item.vote === 'like' && <ThumbsUp className="w-4 h-4 text-green-500" />}
-                        {item.vote === 'dislike' && <ThumbsDown className="w-4 h-4 text-red-500" />}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-900 max-w-xs truncate">
-                        {item.comment || <span className="text-slate-400">No comment</span>}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-900 max-w-xs truncate">
-                        {item.expertNotes || <span className="text-slate-400">No expert notes</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-slate-800">Recent Feedback</h3>
+          {stats.recent_feedback.length === 0 ? (
+            <div className="bg-white p-8 rounded-lg shadow-sm border border-slate-200 text-center">
+              <p className="text-slate-600">No feedback available yet.</p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Clear Confirmation Modal */}
-      {showClearConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">Clear All Feedback Data?</h3>
-            <p className="text-slate-600 mb-6">
-              This will permanently delete all stored feedback data from local storage. This action cannot be undone.
-            </p>
-            <div className="flex space-x-3">
-              <button
-                onClick={() => setShowClearConfirm(false)}
-                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClearFeedback}
-                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-              >
-                Clear Data
-              </button>
+          ) : (
+            <div className="space-y-4">
+              {stats.recent_feedback.map((feedback) => (
+                <div
+                  key={feedback.id}
+                  className="bg-white p-6 rounded-lg shadow-sm border border-slate-200"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          feedback.feedback_type === 'positive'
+                            ? 'bg-green-100 text-green-800'
+                            : feedback.feedback_type === 'negative'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}
+                      >
+                        {feedback.feedback_type}
+                      </span>
+                      {feedback.rating && (
+                        <div className="flex items-center space-x-1">
+                          <Star className="w-4 h-4 text-yellow-400 fill-current" />
+                          <span className="text-sm text-slate-600">{feedback.rating}/5</span>
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-sm text-slate-500">
+                      {formatDate(feedback.created_at)}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 mb-1">Question:</p>
+                      <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
+                        {feedback.question}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 mb-1">Answer:</p>
+                      <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
+                        {feedback.answer.length > 200 
+                          ? `${feedback.answer.substring(0, 200)}...` 
+                          : feedback.answer}
+                      </p>
+                    </div>
+                    
+                    {feedback.feedback_text && (
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 mb-1">Comment:</p>
+                        <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
+                          {feedback.feedback_text}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-slate-200">
+                    <p className="text-xs text-slate-500">
+                      Session: {feedback.session_id} • ID: {feedback.id}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -37,11 +37,13 @@ class Retriever:
         self.enable_reranking = enable_reranking
         self.enable_compression = enable_compression
         self.llm = llm
+
         
         # Create both legacy and advanced retrievers
         self.retriever = self.create_retriever()
-        self.advanced_retriever = self._create_advanced_retriever()
+        self.advanced_retriever = None
     
+        print(f"advanced_retriever: {self.advanced_retriever}")
     def _create_advanced_retriever(self):
         """Create the advanced retriever with enhanced capabilities."""
         try:
