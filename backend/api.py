@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
+from backend.utils.helper import extract_sources_from_toolmessage
 from core.app import get_app
 from config.settings import get_settings
 import os
@@ -325,7 +326,9 @@ async def stream_query(request: QueryRequest):
                 yield f"data: {chunk[0].content}\n\n"
             
             if isinstance(chunk[0], ToolMessage):
-                print(f"Tool message: {chunk[0].content}")
+                sources = extract_sources_from_toolmessage(chunk[0].content)
+                for source in sources:
+                    yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

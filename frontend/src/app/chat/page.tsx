@@ -1,13 +1,32 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import dotenv from 'dotenv';
 import FeedbackRating from '../../components/FeedbackRating';
-import { feedbackService, FeedbackData } from '../../services/feedbackService';
+import { feedbackService } from '../../services/feedbackService';
 
 dotenv.config();
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+type QuestionAnswer = {
+  question: string;
+  answer: string;
+};
+
+type FeedbackData = {
+  questionAnswer: QuestionAnswer;
+  responseId: string;
+  overallRating?: number;
+  accuracy?: number;
+  helpfulness?: number;
+  clarity?: number;
+  vote: 'like' | 'dislike' | null;
+  comment: string;
+  expertNotes: string;
+  timestamp: Date;
+  sessionId?: string;
+};
 
 type Message = {
   id: number;
@@ -15,6 +34,7 @@ type Message = {
   sender: 'user' | 'bot';
   timestamp: Date;
   feedbackSubmitted?: boolean;
+  sources?: string[]; // Array of source URLs
 };
 
 const ChatPage = () => {
@@ -79,6 +99,7 @@ const ChatPage = () => {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder('utf-8');
       let fullText = '';
+      let sources: string[] = [];
       
       if (reader) {
         while (true) {
@@ -91,7 +112,7 @@ const ChatPage = () => {
           // Remove "data: " prefix
           let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
           
-          // Extract and remove session_id BEFORE adding to fullText
+          // Extract and remove session_id BEFORE processing other content
           if (cleanChunk.includes('[SESSION_ID]')) {
             const sessionMatch = cleanChunk.match(/\[SESSION_ID\](.*?)\[\/SESSION_ID\]/);
             if (sessionMatch && !sessionId) {
@@ -101,22 +122,44 @@ const ChatPage = () => {
             // Remove session ID from the chunk so it doesn't appear in chat
             cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
           }
+
+          // Extract sources from the chunk
+          if (cleanChunk.includes('[SOURCE]')) {
+            const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
+            if (sourceMatches) {
+              sourceMatches.forEach(match => {
+                const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '');
+                if (sourceContent.trim() && !sources.includes(sourceContent.trim())) {
+                  sources.push(sourceContent.trim());
+                }
+              });
+            }
+            // Remove source markers from the chunk so they don't appear in chat
+            cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
+          }
           
-          // Only add to fullText if there's actual content after removing session ID
+          // Only add to fullText if there's actual content after removing markers
           if (cleanChunk.trim()) {
             fullText += cleanChunk;
-          
-            // Update UI progressively only when there's actual content
+          }
+
+          // Update UI progressively when there's actual text content or sources
+          if (fullText.trim() || sources.length > 0) {
             setMessages(prev => {
               const last = prev[prev.length - 1];
               if (last && last.sender === 'bot') {
-                return [...prev.slice(0, -1), { ...last, text: fullText }];
+                return [...prev.slice(0, -1), { 
+                  ...last, 
+                  text: fullText,
+                  sources: sources.length > 0 ? sources : undefined
+                }];
               } else {
                 const botMessage: Message = {
                   id: Date.now() + 1,
                   text: fullText,
                   sender: 'bot',
-                  timestamp: new Date()
+                  timestamp: new Date(),
+                  sources: sources.length > 0 ? sources : undefined
                 };
                 return [...prev, botMessage];
               }
@@ -224,6 +267,54 @@ const ChatPage = () => {
                 }`}>
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
                 </div>
+
+                {/* Sources Section for Bot Messages */}
+                {message.sender === 'bot' && message.sources && message.sources.length > 0 && (
+                  <div className="mt-3 p-3 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-lg shadow-sm">
+                    <div className="flex items-center mb-2">
+                      <ExternalLink className="w-3 h-3 text-slate-500 mr-2" />
+                      <span className="text-xs font-medium text-slate-600">Sources:</span>
+                    </div>
+                    <div className="space-y-1">
+                      {message.sources.map((source, idx) => {
+                        // Extract title from URL or use a default
+                        const getSourceTitle = (url: string) => {
+                          try {
+                            const urlObj = new URL(url);
+                            const pathParts = urlObj.pathname.split('/').filter(Boolean);
+                            const lastPart = pathParts[pathParts.length - 1];
+                            if (lastPart && lastPart !== 'index.html') {
+                              return lastPart.replace(/[-_]/g, ' ').replace('.html', '');
+                            }
+                            return urlObj.hostname;
+                          } catch {
+                            return `Source ${idx + 1}`;
+                          }
+                        };
+
+                        return (
+                          <div key={idx} className="group">
+                            <a 
+                              href={source}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline block transition-colors duration-150 group-hover:bg-white/60 p-1 rounded"
+                              title={source}
+                            >
+                              <div className="flex items-center space-x-1">
+                                <span className="font-medium">{getSourceTitle(source)}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              </div>
+                              <div className="text-slate-500 truncate mt-0.5 text-xs">
+                                {source}
+                              </div>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 
                 <div className={`flex items-center mt-2 space-x-2 ${
                   message.sender === 'user' ? 'justify-end' : 'justify-start'
