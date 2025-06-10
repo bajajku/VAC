@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import dotenv from 'dotenv';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import FeedbackRating from '../../components/FeedbackRating';
 import { feedbackService } from '../../services/feedbackService';
 
@@ -99,7 +101,7 @@ const ChatPage = () => {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder('utf-8');
       let fullText = '';
-      let collectedSources: string[] = [];
+                const collectedSources: string[] = [];
       let botMessageId: number | null = null;
       
       if (reader) {
@@ -284,7 +286,37 @@ const ChatPage = () => {
                     ? 'bg-blue-600 text-white ml-auto'
                     : 'bg-white border border-slate-200 text-slate-800'
                 }`}>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                  {message.sender === 'bot' ? (
+                    <div className="prose prose-sm max-w-none">
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Custom components for better styling
+                          p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed text-sm text-slate-800">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-4 mb-3 space-y-1 text-slate-800">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-3 space-y-1 text-slate-800">{children}</ol>,
+                          li: ({ children }) => <li className="text-sm leading-relaxed text-slate-800">{children}</li>,
+                          h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 text-slate-800">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-base font-medium mb-2 text-slate-700">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-sm font-medium mb-1 text-slate-600">{children}</h3>,
+                          strong: ({ children }) => <strong className="font-semibold text-slate-800">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-slate-700">{children}</em>,
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-blue-200 pl-3 py-1 my-2 bg-blue-50 rounded-r text-slate-700">
+                              {children}
+                            </blockquote>
+                          ),
+                          code: ({ children }) => (
+                            <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono text-slate-800">{children}</code>
+                          )
+                        }}
+                      >
+                        {message.text}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                  )}
                 </div>
 
                 {/* Sources Section for Bot Messages */}
