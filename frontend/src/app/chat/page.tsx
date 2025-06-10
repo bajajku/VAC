@@ -99,7 +99,8 @@ const ChatPage = () => {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder('utf-8');
       let fullText = '';
-      let sources: string[] = [];
+      let collectedSources: string[] = [];
+      let botMessageId: number | null = null;
       
       if (reader) {
         while (true) {
@@ -123,14 +124,19 @@ const ChatPage = () => {
             cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
           }
 
-          // Extract sources from the chunk
+          // Extract sources from the chunk and collect them (don't display yet)
           if (cleanChunk.includes('[SOURCE]')) {
             const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
             if (sourceMatches) {
               sourceMatches.forEach(match => {
-                const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '');
-                if (sourceContent.trim() && !sources.includes(sourceContent.trim())) {
-                  sources.push(sourceContent.trim());
+                const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '').trim();
+                // Better duplicate checking - normalize URLs
+                const normalizedSource = sourceContent.toLowerCase();
+                const isDuplicate = collectedSources.some(existing => 
+                  existing.toLowerCase() === normalizedSource
+                );
+                if (sourceContent && !isDuplicate) {
+                  collectedSources.push(sourceContent);
                 }
               });
             }
@@ -143,30 +149,43 @@ const ChatPage = () => {
             fullText += cleanChunk;
           }
 
-          // Update UI progressively when there's actual text content or sources
-          if (fullText.trim() || sources.length > 0) {
+          // Update UI progressively with text content only (no sources yet)
+          if (fullText.trim()) {
             setMessages(prev => {
               const last = prev[prev.length - 1];
-              if (last && last.sender === 'bot') {
+              if (last && last.sender === 'bot' && last.id === botMessageId) {
+                // Update existing bot message
                 return [...prev.slice(0, -1), { 
                   ...last, 
-                  text: fullText,
-                  sources: sources.length > 0 ? sources : undefined
+                  text: fullText
                 }];
               } else {
-                const botMessage: Message = {
+                // Create new bot message
+                const newBotMessage: Message = {
                   id: Date.now() + 1,
                   text: fullText,
                   sender: 'bot',
-                  timestamp: new Date(),
-                  sources: sources.length > 0 ? sources : undefined
+                  timestamp: new Date()
                 };
-                return [...prev, botMessage];
+                botMessageId = newBotMessage.id;
+                return [...prev, newBotMessage];
               }
             });
           }
         }
+
+        // After streaming is complete, add sources to the final message
+        if (collectedSources.length > 0 && botMessageId) {
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === botMessageId 
+                ? { ...msg, sources: collectedSources }
+                : msg
+            )
+          );
+        }
       }
+      
       setLastQuestion(inputText);
       setLastAnswer(fullText);
     } catch (error) {
@@ -284,7 +303,7 @@ const ChatPage = () => {
                             const pathParts = urlObj.pathname.split('/').filter(Boolean);
                             const lastPart = pathParts[pathParts.length - 1];
                             if (lastPart && lastPart !== 'index.html') {
-                              return lastPart.replace(/[-_]/g, ' ').replace('.html', '');
+                              return lastPart.replace(/[-_]/g, ' ').replace('.html', '').replace(/\b\w/g, l => l.toUpperCase());
                             }
                             return urlObj.hostname;
                           } catch {
@@ -312,6 +331,16 @@ const ChatPage = () => {
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sources Loading Indicator for Bot Messages while typing */}
+                {message.sender === 'bot' && isTyping && messages[messages.length - 1]?.id === message.id && (
+                  <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-slate-500">Loading sources...</span>
                     </div>
                   </div>
                 )}
