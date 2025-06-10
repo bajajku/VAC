@@ -12,8 +12,6 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.documents import Document
 from datetime import datetime
-import re
-import traceback
 
 # Enhanced imports for advanced RAG
 from scripts.data_cleaning.data_cleaner import DataCleaner
@@ -325,10 +323,7 @@ async def stream_query(request: QueryRequest):
             # Only stream the final AI messages (not tool calls or intermediate messages)
             
             if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
-                # Clean any function call artifacts that might have leaked
-                cleaned_content = clean_function_call_artifacts(chunk[0].content)
-                if cleaned_content:  # Only yield if there's content after cleaning
-                    yield f"data: {cleaned_content}\n\n"
+                yield f"data: {chunk[0].content}\n\n"
             
             if isinstance(chunk[0], ToolMessage):
                 sources = extract_sources_from_toolmessage(chunk[0].content)
@@ -697,38 +692,6 @@ async def get_feedback_stats(limit: int = 10):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving feedback stats: {str(e)}")
-
-def clean_function_call_artifacts(text: str) -> str:
-    """
-    Remove any JSON function call artifacts that might have leaked into the response.
-    
-    Args:
-        text: The text content to clean
-        
-    Returns:
-        str: Cleaned text with function call artifacts removed
-    """
-    # Pattern to match JSON-like function calls
-    function_call_pattern = r'\{"type":\s*"function".*?\}\s*$'
-    
-    # Remove any trailing JSON function calls
-    cleaned_text = re.sub(function_call_pattern, '', text, flags=re.DOTALL | re.MULTILINE)
-    
-    # Also remove any explicit function call markers
-    function_markers = [
-        r'\{"function":\s*"retrieve_information".*?\}',
-        r'\{"type":\s*"function".*?\}',
-        r'function_call\s*\{.*?\}',
-        r'tool_call\s*\{.*?\}'
-    ]
-    
-    for pattern in function_markers:
-        cleaned_text = re.sub(pattern, '', cleaned_text, flags=re.DOTALL | re.MULTILINE)
-    
-    # Clean up any extra whitespace
-    cleaned_text = cleaned_text.strip()
-    
-    return cleaned_text
 
 # For running with uvicorn
 if __name__ == "__main__":
