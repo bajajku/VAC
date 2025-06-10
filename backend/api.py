@@ -320,6 +320,7 @@ async def stream_query(request: QueryRequest):
         # Stream the response with session support
         for chunk in rag_app.stream_query(request.question, session_id):
             # Only stream the final AI messages (not tool calls or intermediate messages)
+            print(chunk)
             if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
                 yield f"data: {chunk[0].content}\n\n"
 

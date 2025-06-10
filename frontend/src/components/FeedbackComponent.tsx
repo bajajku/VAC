@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { feedbackService, FeedbackCreate } from '../services/feedbackService';
+import { feedbackService} from '../services/feedbackService';
 
 interface FeedbackComponentProps {
   sessionId: string;
