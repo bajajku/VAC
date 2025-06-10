@@ -63,8 +63,8 @@ class RAGApplication:
         print("🚀 Initializing RAG Application...")
         
         # Initialize vector database
-        print("📊 Setting up vector database...")
         self.vector_db = VectorDatabase()
+        print(f"collection_name: {collection_name}")
         self.vector_db.create_vector_database(
             embedding_model=embedding_model,
             type="chroma",

@@ -13,6 +13,7 @@ class GlobalRetriever:
     def initialize(self, vector_database: VectorDatabase):
         """Initialize the global retriever with a vector database."""
         self._vector_db = vector_database
+        print(f"vector_database: {self._vector_db}")
         self._retriever = Retriever(vector_database.vector_database)
     
     def get_relevant_documents(self, query: str, k: int = 4) -> List[Document]:

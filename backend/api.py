@@ -11,12 +11,20 @@ import os
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.documents import Document
+from datetime import datetime
 
 # Enhanced imports for advanced RAG
 from scripts.data_cleaning.data_cleaner import DataCleaner
 from models.advanced_retriever import AdvancedRetriever
 from models.tools.retriever_tool import configure_retriever, retrieve_information, get_retrieval_stats
 from utils.retriever import global_retriever
+
+# MongoDB and Feedback imports
+from config.mongodb import mongodb_config
+from models.feedback import (
+    FeedbackCreate, FeedbackResponse, FeedbackUpdate, FeedbackStats,
+    feedback_service
+)
 
 load_dotenv()
 
@@ -49,6 +57,15 @@ class EnhancedQueryRequest(BaseModel):
     enable_reranking: Optional[bool] = True
     similarity_threshold: Optional[float] = 0.7
 
+class FeedbackRequest(BaseModel):
+    session_id: str
+    question: str
+    answer: str
+    feedback_type: str  # 'positive', 'negative', 'suggestion'
+    feedback_text: Optional[str] = None
+    rating: Optional[int] = None
+    user_id: Optional[str] = None
+
 # Initialize FastAPI app
 app_api = FastAPI(
     title="RAG System API",
@@ -72,10 +89,16 @@ advanced_retriever = None
 
 @app_api.on_event("startup")
 async def startup_event():
-    """Initialize the enhanced RAG system on startup."""
+    """Initialize the enhanced RAG system and MongoDB on startup."""
     global rag_app, is_initialized, advanced_retriever
     
     try:
+        # Initialize MongoDB connection
+        print("🔌 Connecting to MongoDB...")
+        mongodb_connected = await mongodb_config.connect()
+        if not mongodb_connected:
+            print("⚠️ MongoDB connection failed, feedback features will be disabled")
+        
         TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
         # Check if we should skip auto-processing on startup
         SKIP_AUTO_PROCESSING = os.getenv("SKIP_AUTO_PROCESSING", "false").lower() == "true"
@@ -174,6 +197,11 @@ async def startup_event():
     except Exception as e:
         print(f"❌ Failed to initialize Enhanced RAG API: {e}")
         is_initialized = False
+
+@app_api.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    await mongodb_config.disconnect()
 
 @app_api.get("/", response_model=StatusResponse)
 async def root():
@@ -468,6 +496,195 @@ async def configure_advanced_retriever(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error configuring retriever: {str(e)}")
+
+# =============================================================================
+# MONGODB DEBUG ENDPOINTS
+# =============================================================================
+
+@app_api.get("/test-mongodb")
+async def test_mongodb_connection():
+    """Test MongoDB connection and provide detailed diagnostics."""
+    diagnostics = {
+        "connection_status": "unknown",
+        "database_status": "unknown", 
+        "collection_test": "unknown",
+        "environment_vars": {},
+        "error_details": None
+    }
+    
+    try:
+        # Check environment variables
+        diagnostics["environment_vars"] = {
+            "MONGODB_URL_SET": bool(os.getenv("MONGODB_URL")),
+            "MONGODB_DATABASE_SET": bool(os.getenv("MONGODB_DATABASE")),
+            "URL_PREFIX": os.getenv("MONGODB_URL", "")[:20] + "..." if os.getenv("MONGODB_URL") else None,
+            "DATABASE_NAME": os.getenv("MONGODB_DATABASE", "not_set")
+        }
+        
+        # Test connection
+        print("🧪 Testing MongoDB connection...")
+        mongodb_connected = await mongodb_config.connect()
+        
+        if mongodb_connected:
+            diagnostics["connection_status"] = "✅ Connected successfully"
+            
+            # Test database access
+            if mongodb_config.database is not None:
+                diagnostics["database_status"] = f"✅ Database '{mongodb_config.database.name}' accessible"
+                
+                # Test collection operations
+                try:
+                    test_collection = mongodb_config.get_collection("connection_test")
+                    
+                    # Insert test document
+                    test_doc = {
+                        "test": True,
+                        "timestamp": datetime.utcnow(),
+                        "message": "Connection test successful"
+                    }
+                    result = await test_collection.insert_one(test_doc)
+                    
+                    # Count documents
+                    count = await test_collection.count_documents({})
+                    
+                    # Clean up test document
+                    await test_collection.delete_one({"_id": result.inserted_id})
+                    
+                    diagnostics["collection_test"] = f"✅ Insert/count/delete successful. Found {count} total test docs"
+                    
+                except Exception as e:
+                    diagnostics["collection_test"] = f"❌ Collection operation failed: {str(e)}"
+            else:
+                diagnostics["database_status"] = "❌ Database object is None"
+        else:
+            diagnostics["connection_status"] = "❌ Connection failed"
+            
+    except Exception as e:
+        diagnostics["error_details"] = str(e)
+        diagnostics["connection_status"] = f"❌ Exception during connection test: {str(e)}"
+    
+    return diagnostics
+
+@app_api.get("/feedback-service-status")
+async def check_feedback_service_status():
+    """Check if feedback service is ready to use."""
+    try:
+        # Check if MongoDB is connected
+        if mongodb_config.database is None:
+            return {
+                "status": "❌ Not Ready",
+                "issue": "MongoDB not connected",
+                "solution": "Check MongoDB connection string and network access"
+            }
+        
+        # Try to get feedback collection
+        try:
+            collection = mongodb_config.get_collection("feedback")
+            count = await collection.count_documents({})
+            
+            return {
+                "status": "✅ Ready",
+                "feedback_collection": f"Accessible ({count} documents)",
+                "database": mongodb_config.database.name
+            }
+        except Exception as e:
+            return {
+                "status": "❌ Not Ready", 
+                "issue": f"Cannot access feedback collection: {str(e)}",
+                "database_connected": mongodb_config.database is not None
+            }
+            
+    except Exception as e:
+        return {
+            "status": "❌ Error",
+            "error": str(e)
+        }
+
+# =============================================================================
+# FEEDBACK ENDPOINTS
+# =============================================================================
+
+@app_api.post("/feedback", response_model=FeedbackResponse)
+async def create_feedback(request: FeedbackRequest):
+    """Create new feedback for a conversation."""
+    try:
+        feedback_data = FeedbackCreate(
+            session_id=request.session_id,
+            question=request.question,
+            answer=request.answer,
+            feedback_type=request.feedback_type,
+            feedback_text=request.feedback_text,
+            rating=request.rating,
+            user_id=request.user_id
+        )
+        
+        feedback = await feedback_service.create_feedback(feedback_data)
+        return feedback
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating feedback: {str(e)}")
+
+@app_api.get("/feedback/{feedback_id}", response_model=FeedbackResponse)
+async def get_feedback(feedback_id: str):
+    """Get feedback by ID."""
+    try:
+        feedback = await feedback_service.get_feedback_by_id(feedback_id)
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        return feedback
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving feedback: {str(e)}")
+
+@app_api.get("/feedback/session/{session_id}", response_model=List[FeedbackResponse])
+async def get_session_feedback(session_id: str):
+    """Get all feedback for a session."""
+    try:
+        feedback_list = await feedback_service.get_feedback_by_session(session_id)
+        return feedback_list
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session feedback: {str(e)}")
+
+@app_api.put("/feedback/{feedback_id}", response_model=FeedbackResponse)
+async def update_feedback(feedback_id: str, update_data: FeedbackUpdate):
+    """Update feedback by ID."""
+    try:
+        feedback = await feedback_service.update_feedback(feedback_id, update_data)
+        if not feedback:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        return feedback
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating feedback: {str(e)}")
+
+@app_api.delete("/feedback/{feedback_id}")
+async def delete_feedback(feedback_id: str):
+    """Delete feedback by ID."""
+    try:
+        success = await feedback_service.delete_feedback(feedback_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Feedback not found")
+        return {"message": "Feedback deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting feedback: {str(e)}")
+
+@app_api.get("/feedback-stats", response_model=FeedbackStats)
+async def get_feedback_stats(limit: int = 10):
+    """Get feedback statistics and recent feedback."""
+    try:
+        stats = await feedback_service.get_feedback_stats(limit)
+        return stats
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving feedback stats: {str(e)}")
 
 # For running with uvicorn
 if __name__ == "__main__":
