@@ -8,6 +8,29 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
     Helper functions to handle tool errors and execute tools.
 '''
 
+import re
+from typing import List
+
+def extract_sources_from_toolmessage(content: str) -> List[str]:
+    """
+    Extracts all unique sources from a ToolMessage content string.
+    
+    Args:
+        content (str): The full content string from ToolMessage.
+    
+    Returns:
+        List[str]: A list of unique sources extracted from the content.
+    """
+    # Match patterns like (from: ...some/path.html)
+    pattern = r'\(from:\s*(.*?)\)'
+    matches = re.findall(pattern, content)
+    
+    # Deduplicate and strip extra whitespace
+    unique_sources = list({match.strip() for match in matches})
+    
+    return unique_sources
+
+
 def handle_tool_error(state) -> dict:
     """
     Function to handle errors that occur during tool execution.

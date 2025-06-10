@@ -4,8 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
-import asyncio
-from backend.utils.helper import extract_sources_from_toolmessage
+from utils.helper import extract_sources_from_toolmessage
 from core.app import get_app
 from config.settings import get_settings
 import os
