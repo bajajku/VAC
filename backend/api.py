@@ -326,19 +326,9 @@ async def stream_query(request: QueryRequest):
                 yield f"data: {chunk[0].content}\n\n"
             
             if isinstance(chunk[0], ToolMessage):
-                # Collect sources but don't yield yet
                 sources = extract_sources_from_toolmessage(chunk[0].content)
-                if not hasattr(stream_query, '_collected_sources'):
-                    stream_query._collected_sources = set()
-                stream_query._collected_sources.update(sources)
-            
-            # If this is the last message (no more chunks coming), yield all collected sources
-            if isinstance(chunk[0], AIMessage) and not chunk[0].tool_calls:
-                if hasattr(stream_query, '_collected_sources'):
-                    for source in stream_query._collected_sources:
-                        yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
-                    # Clear the sources after yielding
-                    stream_query._collected_sources.clear()
+                for source in sources:
+                    yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
