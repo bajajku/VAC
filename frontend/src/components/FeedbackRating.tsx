@@ -9,10 +9,10 @@ type QuestionAnswer = {
 type FeedbackData = {
   questionAnswer: QuestionAnswer;
   responseId: string;
-  overallRating: number; // 1-5 stars
-  accuracy: number; // 1-5 stars
-  helpfulness: number; // 1-5 stars
-  clarity: number; // 1-5 stars
+  overallRating?: number; // 1-5 stars, optional
+  accuracy?: number; // 1-5 stars, optional
+  helpfulness?: number; // 1-5 stars, optional
+  clarity?: number; // 1-5 stars, optional
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
@@ -28,7 +28,7 @@ type FeedbackRatingProps = {
 };
 
 const StarRating: React.FC<{
-  rating: number;
+  rating: number | undefined;
   onRating: (rating: number) => void;
   label: string;
   size?: 'sm' | 'md' | 'lg';
@@ -55,7 +55,7 @@ const StarRating: React.FC<{
           >
             <Star
               className={`w-full h-full ${
-                star <= (hoverRating || rating)
+                star <= (hoverRating || rating || 0)
                   ? 'text-yellow-400 fill-yellow-400'
                   : 'text-slate-300'
               }`}
@@ -78,24 +78,35 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
   const [feedback, setFeedback] = useState<Partial<FeedbackData>>({
     responseId,
     sessionId,
-    overallRating: 0,
-    accuracy: 0,
-    helpfulness: 0,
-    clarity: 0,
+    overallRating: undefined,
+    accuracy: undefined,
+    helpfulness: undefined,
+    clarity: undefined,
     vote: null,
     comment: '',
     expertNotes: '',
   });
 
   const handleSubmit = () => {
+    // Validate that at least one rating is provided (and not 0)
+    const hasValidRating = (feedback.overallRating && feedback.overallRating > 0) ||
+                          (feedback.accuracy && feedback.accuracy > 0) ||
+                          (feedback.helpfulness && feedback.helpfulness > 0) ||
+                          (feedback.clarity && feedback.clarity > 0);
+    
+    if (!hasValidRating && !feedback.vote && !feedback.comment && !feedback.expertNotes) {
+      alert('Please provide at least one rating (1-5 stars), vote, or comment before submitting.');
+      return;
+    }
+
     const completeFeedback: FeedbackData = {
       questionAnswer: { question: '', answer: '' }, // Will be overridden by parent component
       responseId,
       sessionId,
-      overallRating: feedback.overallRating || 0,
-      accuracy: feedback.accuracy || 0,
-      helpfulness: feedback.helpfulness || 0,
-      clarity: feedback.clarity || 0,
+      overallRating: feedback.overallRating,
+      accuracy: feedback.accuracy,
+      helpfulness: feedback.helpfulness,
+      clarity: feedback.clarity,
       vote: feedback.vote || null,
       comment: feedback.comment || '',
       expertNotes: feedback.expertNotes || '',
@@ -110,8 +121,14 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
     setFeedback(prev => ({ ...prev, [field]: value }));
   };
 
-  const hasAnyRating = feedback.overallRating! > 0 || feedback.vote !== null || 
-                      feedback.comment !== '' || feedback.expertNotes !== '';
+  // Updated validation to require actual ratings (not 0) or other feedback
+  const hasValidFeedback = (feedback.overallRating && feedback.overallRating > 0) ||
+                          (feedback.accuracy && feedback.accuracy > 0) ||
+                          (feedback.helpfulness && feedback.helpfulness > 0) ||
+                          (feedback.clarity && feedback.clarity > 0) ||
+                          feedback.vote !== null ||
+                          (feedback.comment && feedback.comment.trim() !== '') ||
+                          (feedback.expertNotes && feedback.expertNotes.trim() !== '');
 
   if (submitted) {
     return (
@@ -157,7 +174,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
         >
           <MessageSquare className="w-4 h-4" />
         </button>
-        {hasAnyRating && (
+        {hasValidFeedback && (
           <button
             onClick={handleSubmit}
             className="px-3 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors duration-150"
@@ -212,22 +229,22 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
       {/* Detailed Ratings */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
         <StarRating
-          rating={feedback.overallRating!}
+          rating={feedback.overallRating}
           onRating={(rating) => updateFeedback('overallRating', rating)}
           label="Overall"
         />
         <StarRating
-          rating={feedback.accuracy!}
+          rating={feedback.accuracy}
           onRating={(rating) => updateFeedback('accuracy', rating)}
           label="Accuracy"
         />
         <StarRating
-          rating={feedback.helpfulness!}
+          rating={feedback.helpfulness}
           onRating={(rating) => updateFeedback('helpfulness', rating)}
           label="Helpfulness"
         />
         <StarRating
-          rating={feedback.clarity!}
+          rating={feedback.clarity}
           onRating={(rating) => updateFeedback('clarity', rating)}
           label="Clarity"
         />
@@ -266,7 +283,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
       <div className="flex justify-end pt-2 border-t border-slate-200">
         <button
           onClick={handleSubmit}
-          disabled={!hasAnyRating}
+          disabled={!hasValidFeedback}
           className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
         >
           <Send className="w-4 h-4" />

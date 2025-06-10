@@ -41,10 +41,10 @@ type QuestionAnswer = {
 type LegacyFeedbackData = {
   questionAnswer: QuestionAnswer;
   responseId: string;
-  overallRating: number;
-  accuracy: number;
-  helpfulness: number;
-  clarity: number;
+  overallRating?: number;
+  accuracy?: number;
+  helpfulness?: number;
+  clarity?: number;
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
@@ -189,7 +189,8 @@ class FeedbackService {
         answer: feedback.questionAnswer.answer,
         feedback_type: feedback.vote === 'like' ? 'positive' : feedback.vote === 'dislike' ? 'negative' : 'suggestion',
         feedback_text: feedback.comment || feedback.expertNotes,
-        rating: feedback.overallRating,
+        // Only include rating if it's a valid rating (1-5), not 0 or undefined
+        rating: feedback.overallRating && feedback.overallRating > 0 ? feedback.overallRating : undefined,
       };
 
       const result = await this.createFeedback(newFeedback);
@@ -206,40 +207,6 @@ class FeedbackService {
     }
   }
 
-  private calculateLocalStats(feedback: FeedbackStorageItem[]) {
-    if (feedback.length === 0) {
-      return {
-        totalFeedback: 0,
-        averageRatings: { overall: 0, accuracy: 0, helpfulness: 0, clarity: 0 },
-        voteDistribution: { likes: 0, dislikes: 0, neutral: 0 }
-      };
-    }
-
-    const ratingsSum = feedback.reduce((acc, item) => ({
-      overall: acc.overall + item.overallRating,
-      accuracy: acc.accuracy + item.accuracy,
-      helpfulness: acc.helpfulness + item.helpfulness,
-      clarity: acc.clarity + item.clarity,
-    }), { overall: 0, accuracy: 0, helpfulness: 0, clarity: 0 });
-
-    const votes = feedback.reduce((acc, item) => ({
-      likes: acc.likes + (item.vote === 'like' ? 1 : 0),
-      dislikes: acc.dislikes + (item.vote === 'dislike' ? 1 : 0),
-      neutral: acc.neutral + (item.vote === null ? 1 : 0),
-    }), { likes: 0, dislikes: 0, neutral: 0 });
-
-    return {
-      totalFeedback: feedback.length,
-      averageRatings: {
-        overall: ratingsSum.overall / feedback.length,
-        accuracy: ratingsSum.accuracy / feedback.length,
-        helpfulness: ratingsSum.helpfulness / feedback.length,
-        clarity: ratingsSum.clarity / feedback.length,
-      },
-      voteDistribution: votes
-    };
-  }
-
   async exportFeedback(): Promise<FeedbackStorageItem[]> {
     try {
       // Try to get from new API first
@@ -253,10 +220,10 @@ class FeedbackService {
             answer: feedback.answer
           },
           responseId: feedback.id,
-          overallRating: feedback.rating || 0,
-          accuracy: 0, // Not available in new format
-          helpfulness: 0, // Not available in new format
-          clarity: 0, // Not available in new format
+          overallRating: feedback.rating && feedback.rating > 0 ? feedback.rating : undefined,
+          accuracy: undefined, // Not available in new format
+          helpfulness: undefined, // Not available in new format
+          clarity: undefined, // Not available in new format
           vote: feedback.feedback_type === 'positive' ? 'like' as const : 
                 feedback.feedback_type === 'negative' ? 'dislike' as const : null,
           comment: feedback.feedback_text || '',
