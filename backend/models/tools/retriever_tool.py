@@ -52,8 +52,6 @@ def retrieve_information(query: str, max_results: int = 5,
             if 'source' in metadata:
                 source = metadata['source']
                 # Truncate long URLs/paths for readability
-                if len(source) > 50:
-                    source = "..." + source[-47:]
                 result_entry += f" (from: {source})"
             
             # Add content type and relevance info if available
