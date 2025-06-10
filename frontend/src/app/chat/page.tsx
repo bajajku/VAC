@@ -230,24 +230,6 @@ const ChatPage = () => {
     });
   };
 
-  // Function to clean up response formatting
-  const cleanResponseText = (text: string) => {
-    return text
-      // Fix missing spaces after periods
-      .replace(/\.([A-Z])/g, '. $1')
-      // Fix missing spaces after other punctuation
-      .replace(/([!?])([A-Z])/g, '$1 $2')
-      // Convert asterisk bullet points to proper markdown
-      .replace(/^\* /gm, '• ')
-      // Fix line breaks for bullet points
-      .replace(/([^.\n])(\* )/g, '$1\n• ')
-      // Clean up multiple spaces
-      .replace(/ +/g, ' ')
-      // Ensure proper line breaks around bullet lists
-      .replace(/([.!?])(\n• )/g, '$1\n\n• ')
-      .trim();
-  };
-
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
@@ -333,7 +315,7 @@ const ChatPage = () => {
                           )
                         }}
                                               >
-                          {cleanResponseText(message.text)}
+                          {message.text}
                         </ReactMarkdown>
                     </div>
                   ) : (
