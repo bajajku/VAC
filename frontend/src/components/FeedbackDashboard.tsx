@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, Star, ThumbsUp, ThumbsDown, MessageSquare, Trash2, TrendingUp } from 'lucide-react';
-import { feedbackService, FeedbackStats, FeedbackResponse } from '../services/feedbackService';
-
+import { Download, RefreshCw, Star, ThumbsUp, ThumbsDown, MessageSquare, TrendingUp } from 'lucide-react';
+import { feedbackService, FeedbackStats} from '../services/feedbackService';
+  
 const FeedbackDashboard: React.FC = () => {
   const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [loading, setLoading] = useState(true);
