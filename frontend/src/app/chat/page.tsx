@@ -223,7 +223,29 @@ const ChatPage = () => {
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+  };
+
+  // Function to clean up response formatting
+  const cleanResponseText = (text: string) => {
+    return text
+      // Fix missing spaces after periods
+      .replace(/\.([A-Z])/g, '. $1')
+      // Fix missing spaces after other punctuation
+      .replace(/([!?])([A-Z])/g, '$1 $2')
+      // Convert asterisk bullet points to proper markdown
+      .replace(/^\* /gm, '• ')
+      // Fix line breaks for bullet points
+      .replace(/([^.\n])(\* )/g, '$1\n• ')
+      // Clean up multiple spaces
+      .replace(/ +/g, ' ')
+      // Ensure proper line breaks around bullet lists
+      .replace(/([.!?])(\n• )/g, '$1\n\n• ')
+      .trim();
   };
 
   return (
@@ -310,9 +332,9 @@ const ChatPage = () => {
                             <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono text-slate-800">{children}</code>
                           )
                         }}
-                      >
-                        {message.text}
-                      </ReactMarkdown>
+                                              >
+                          {cleanResponseText(message.text)}
+                        </ReactMarkdown>
                     </div>
                   ) : (
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
