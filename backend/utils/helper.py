@@ -11,6 +11,23 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 import re
 from typing import List
 
+def pretty_print_jury_response(jury_response: dict) -> str:
+   print("-"*100)
+   print("Jury Response")
+   print("-"*100)
+   print(f"Consensus: {jury_response['consensus']}")
+   print("-"*100)
+   for i, r in enumerate(jury_response['individual_responses']):
+      print(f"Response {i+1}:")
+      print(r['response'])
+   print("-"*100)
+   print(f"Jury size: {jury_response['jury_size']}")
+   print("-"*100)
+   print(f"Voting strategy: {jury_response['voting_strategy']}")
+   print("-"*100)
+   print(f"Response count: {jury_response['response_count']}")
+   print("-"*100)
+
 def extract_sources_from_toolmessage(content: str) -> List[str]:
     """
     Extracts all unique sources from a ToolMessage content string.
