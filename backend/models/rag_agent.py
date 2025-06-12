@@ -109,17 +109,6 @@ class RAGAgent:
     # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
-
-        if "configurable" not in config or "session_id" not in config["configurable"]:
-            raise ValueError(
-                "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
-            )
-
-        session_id = config["configurable"]["session_id"]
-        
-        # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
-        recent_history = self._get_recent_clean_history(session_id, max_messages=6)
-        
         # 🎯 ADD SYSTEM PROMPT HERE
         system_prompt = SystemMessage(content="""
 You are a trauma-informed, empathetic mental health assistant. Your role is to support **military personnel and veterans** with mental health concerns.
@@ -155,17 +144,34 @@ TOOLS:
 - If additional information is needed, use retrieval silently — NEVER mention tool use or retrieval in your reply
 - Integrate retrieved content naturally and fully into the response
 
-IMPORTANT:
-- Never fabricate, speculate, or provide triggering content
-- Focus only on emotional support and trauma-informed practices for military and veteran users""")
-        
-        # Combine with current state (system prompt first)
-        messages = [system_prompt] + recent_history + state["messages"]
-        
-        response = self.llm_with_tools.invoke(messages)
-        
-        # Store clean exchange
-        self._store_clean_exchange(session_id, state["messages"], response)
+IMPORTANT: 
+- When you need additional information, simply call the retrieve_information tool without mentioning that you're doing so
+- Do NOT say "Here is a function call" or mention function calls in your responses
+- Integrate retrieved information naturally into your response
+- If you need to search for resources, do so quietly and present the information as part of your natural response
+- Ensure each response is complete and non-repetitive
+
+You are here to support — not to replace professional therapy.
+        """)
+        if "configurable" not in config or "session_id" not in config["configurable"]:
+        #     raise ValueError(
+        #         "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
+        # )
+            messages = [system_prompt] + state["messages"]
+            response = self.llm_with_tools.invoke(messages)
+        else:
+
+            session_id = config["configurable"]["session_id"]
+            # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
+            recent_history = self._get_recent_clean_history(session_id, max_messages=6)
+            
+            # Combine with current state (system prompt first)
+            messages = [system_prompt] + recent_history + state["messages"]
+            
+            response = self.llm_with_tools.invoke(messages)
+            
+            # Store clean exchange
+            self._store_clean_exchange(session_id, state["messages"], response)
 
         return {"messages": [response]}
 

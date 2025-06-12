@@ -6,3 +6,6 @@ chroma_db/
 data/backend/chroma_db/chroma.sqlite3
 backend/chroma_db/*.sqlite3 # Ignore all SQLite files
 postman_collection.json
+*.log
+*.json
+*.txt
