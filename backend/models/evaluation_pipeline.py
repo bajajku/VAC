@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional, Union
 from models.rag_evaluator import RAGEvaluator, EvaluationCriteria, RAGEvaluationReport
 from models.rag_agent import RAGAgent
 from models.rag_chain import RAGChain
+from models.evaluation_logger import RAGEvaluationLogger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 import json
@@ -35,6 +36,10 @@ class RAGEvaluationPipeline:
         self.default_criteria = kwargs.get('default_criteria', list(EvaluationCriteria))
         self.save_results = kwargs.get('save_results', True)
         
+        # Initialize logger
+        log_dir = kwargs.get('log_dir', "logs/rag_evaluation")
+        self.logger = RAGEvaluationLogger(log_dir)
+        
         print(f"✅ RAG Evaluation Pipeline initialized")
     
     def evaluate_single_query(self, 
@@ -54,40 +59,46 @@ class RAGEvaluationPipeline:
         Returns:
             Dict containing query, response, evaluation report, and metadata
         """
-        print(f"🔍 Evaluating query: {query[:100]}...")
+        self.logger.log_evaluation_start(query)
         
-        # Generate RAG response
-        start_time = time.time()
-        response = self._generate_rag_response(query)
-        response_time = time.time() - start_time
-        
-        # Extract or use provided context documents
-        if context_documents is None:
-            context_documents = self._extract_context_documents(query)
-        
-        # Evaluate the response
-        evaluation_report = self.evaluator.evaluate_rag_response(
-            query=query,
-            response=response,
-            context_documents=context_documents,
-            criteria=criteria or self.default_criteria
-        )
-        
-        result = {
-            'query': query,
-            'response': response,
-            'evaluation_report': evaluation_report,
-            'expected_response': expected_response,
-            'context_documents': context_documents,
-            'response_time': response_time,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        # Store in evaluation history
-        if self.save_results:
-            self.evaluation_history.append(result)
-        
-        return result
+        try:
+            # Generate RAG response
+            start_time = time.time()
+            response = self._generate_rag_response(query)
+            response_time = time.time() - start_time
+            
+            # Extract or use provided context documents
+            if context_documents is None:
+                context_documents = self._extract_context_documents(query)
+            
+            # Evaluate the response
+            evaluation_report = self.evaluator.evaluate_rag_response(
+                query=query,
+                response=response,
+                context_documents=context_documents,
+                criteria=criteria or self.default_criteria
+            )
+            
+            result = {
+                'query': query,
+                'response': response,
+                'evaluation_report': evaluation_report,
+                'expected_response': expected_response,
+                'context_documents': context_documents,
+                'response_time': response_time,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Store in evaluation history
+            if self.save_results:
+                self.evaluation_history.append(result)
+            
+            self.logger.log_evaluation_complete(query, evaluation_report.overall_score)
+            return result
+            
+        except Exception as e:
+            self.logger.log_error(f"Error evaluating query: {query}", e)
+            raise
     
     def batch_evaluate(self, 
                       test_cases: List[Dict[str, Any]], 
@@ -202,11 +213,11 @@ class RAGEvaluationPipeline:
     def _generate_rag_response(self, query: str) -> str:
         """Generate response using the RAG system."""
         try:
-            if hasattr(self.rag_system, 'invoke'):
-                response = self.rag_system.invoke(query)
-                return response if isinstance(response, str) else str(response)
-            else:
-                return "Unable to generate response - RAG system not compatible"
+            # if hasattr(self.rag_system, 'invoke'):
+
+            print(type(self.rag_system))
+            response = self.rag_system.invoke(query)
+            return response if isinstance(response, str) else str(response)
         except Exception as e:
             print(f"❌ Error generating RAG response: {e}")
             return f"Error generating response: {str(e)}"
@@ -301,19 +312,13 @@ class RAGEvaluationPipeline:
         return report
     
     def save_evaluation_results(self, results: List[Dict[str, Any]], filename: Optional[str] = None):
-        """Save evaluation results to a JSON file."""
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"rag_evaluation_results_{timestamp}.json"
-        
+        """Save evaluation results to JSON and generate summary."""
         comprehensive_report = self.generate_comprehensive_report(results)
-        
-        try:
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(comprehensive_report, f, indent=2, ensure_ascii=False, default=str)
-            print(f"✅ Evaluation results saved to {filename}")
-        except Exception as e:
-            print(f"❌ Error saving results: {e}")
+        self.logger.save_evaluation_results(results, comprehensive_report, filename)
+    
+    def get_latest_evaluations(self, n: int = 5) -> List[Dict[str, Any]]:
+        """Get the n most recent evaluation results."""
+        return self.logger.get_latest_results(n)
     
     def get_evaluation_history(self) -> List[Dict[str, Any]]:
         """Get the complete evaluation history."""

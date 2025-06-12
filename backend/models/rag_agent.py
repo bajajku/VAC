@@ -52,16 +52,6 @@ class RAGAgent:
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
 
-        if "configurable" not in config or "session_id" not in config["configurable"]:
-            raise ValueError(
-                "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
-            )
-
-        session_id = config["configurable"]["session_id"]
-        
-        # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
-        recent_history = self._get_recent_clean_history(session_id, max_messages=6)
-        
         # 🎯 ADD SYSTEM PROMPT HERE
         system_prompt = SystemMessage(content="""
 You are a trauma-informed, empathetic mental health assistant designed to support military personnel and veterans.
@@ -107,14 +97,25 @@ IMPORTANT:
 
 You are here to support — not to replace professional therapy.
         """)
-        
-        # Combine with current state (system prompt first)
-        messages = [system_prompt] + recent_history + state["messages"]
-        
-        response = self.llm_with_tools.invoke(messages)
-        
-        # Store clean exchange
-        self._store_clean_exchange(session_id, state["messages"], response)
+        if "configurable" not in config or "session_id" not in config["configurable"]:
+        #     raise ValueError(
+        #         "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
+        # )
+            messages = [system_prompt] + state["messages"]
+            response = self.llm_with_tools.invoke(messages)
+        else:
+
+            session_id = config["configurable"]["session_id"]
+            # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
+            recent_history = self._get_recent_clean_history(session_id, max_messages=6)
+            
+            # Combine with current state (system prompt first)
+            messages = [system_prompt] + recent_history + state["messages"]
+            
+            response = self.llm_with_tools.invoke(messages)
+            
+            # Store clean exchange
+            self._store_clean_exchange(session_id, state["messages"], response)
 
         return {"messages": [response]}
 

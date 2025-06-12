@@ -12,6 +12,7 @@ import os
 import sys
 import asyncio
 from typing import List, Dict, Any
+from pathlib import Path
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -19,6 +20,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from models.rag_agent import create_rag_agent
 from models.evaluation_pipeline import create_evaluation_pipeline, TestCaseGenerator
 from models.rag_evaluator import EvaluationCriteria, create_rag_evaluator
+from dotenv import load_dotenv
+
+load_dotenv()
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
 def setup_example_config():
     """
@@ -28,19 +33,19 @@ def setup_example_config():
     # Example configuration - replace with real API keys
     evaluator_configs = [
         {
-            'provider': 'openai', 
-            'model_name': 'gpt-4', 
-            'api_key': os.getenv('OPENAI_API_KEY', 'your-openai-key-here')
+            "provider": "chatopenai",
+            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "api_key": TOGETHER_API_KEY,
         },
         {
-            'provider': 'openai', 
-            'model_name': 'gpt-3.5-turbo', 
-            'api_key': os.getenv('OPENAI_API_KEY', 'your-openai-key-here')
+            "provider": "chatopenai",
+            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "api_key": TOGETHER_API_KEY,
         },
         {
-            'provider': 'openrouter', 
-            'model_name': 'mistralai/mistral-7b-instruct', 
-            'api_key': os.getenv('OPENROUTER_API_KEY', 'your-openrouter-key-here')
+            "provider": "chatopenai",
+            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "api_key": TOGETHER_API_KEY,
         }
     ]
     
@@ -52,13 +57,21 @@ def example_1_basic_evaluation():
     print("EXAMPLE 1: Basic Single Query Evaluation")
     print("=" * 60)
     
-    # Setup
+    # Setup with custom log directory
     evaluator_configs = setup_example_config()
-    rag_agent = create_rag_agent(provider="openai", model_name="gpt-3.5-turbo")
-    pipeline = create_evaluation_pipeline(rag_agent, evaluator_configs)
+    rag_agent = create_rag_agent(provider="chatopenai", model_name="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", api_key=TOGETHER_API_KEY)
+    
+    # Create logs directory in the examples folder
+    log_dir = Path(__file__).parent / "logs" / "example_evaluation"
+    pipeline = create_evaluation_pipeline(
+        rag_agent, 
+        evaluator_configs,
+        log_dir=str(log_dir)
+    )
     
     # Evaluate a single query
     query = "What are the symptoms of PTSD in military veterans?"
+    print(f"Query: {query}")
     result = pipeline.evaluate_single_query(query)
     
     # Display results
@@ -70,6 +83,15 @@ def example_1_basic_evaluation():
     for criterion, eval_result in result['evaluation_report'].evaluation_results.items():
         print(f"  {criterion.replace('_', ' ').title()}: {eval_result.score}/10")
         print(f"    Reasoning: {eval_result.reasoning[:100]}...")
+    
+    # Save the results
+    pipeline.save_evaluation_results([result], "example_1_basic_evaluation")
+    
+    # Show where logs are stored
+    print("\nLogs have been saved to:")
+    print(f"- JSON results: {log_dir}/json/example_1_basic_evaluation.json")
+    print(f"- Summary: {log_dir}/summaries/example_1_basic_evaluation.txt")
+    print(f"- Debug log: {log_dir}/debug/rag_evaluation.log")
     
     return result
 
@@ -267,26 +289,22 @@ def main():
     print()
     
     try:
-        # Run synchronous examples
-        example_1_basic_evaluation()
-        example_2_batch_evaluation()
-        example_3_safety_focused_evaluation()
-        example_4_custom_criteria_evaluation()
-        example_5_evaluation_with_mock_contexts()
+        # Run example with logging
+        result = example_1_basic_evaluation()
         
-        # Run async example
-        print("\nRunning async example...")
-        asyncio.run(example_6_async_evaluation())
+        # Show recent evaluations
+        print("\nRecent Evaluations:")
+        recent = result['evaluation_report']
+        print(f"Latest evaluation score: {recent.overall_score}/10")
         
         print("\n" + "=" * 60)
-        print("ALL EXAMPLES COMPLETED SUCCESSFULLY!")
+        print("EXAMPLE COMPLETED SUCCESSFULLY!")
         print("=" * 60)
         print("\nNext Steps:")
-        print("1. Replace example API keys with real ones")
-        print("2. Implement context document extraction in _extract_context_documents()")
-        print("3. Customize evaluation criteria weights based on your needs")
-        print("4. Add domain-specific test cases")
-        print("5. Integrate with your CI/CD pipeline for continuous evaluation")
+        print("1. Check the logs directory for detailed results")
+        print("2. Review the JSON files for complete evaluation data")
+        print("3. Check the summary files for human-readable reports")
+        print("4. Monitor the debug log for detailed process information")
         
     except Exception as e:
         print(f"❌ Error running examples: {e}")
