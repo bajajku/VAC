@@ -13,10 +13,12 @@ import sys
 import asyncio
 from typing import List, Dict, Any
 from pathlib import Path
+from langchain_core.documents import Document
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+from core.app import get_app
 from models.rag_agent import create_rag_agent
 from models.evaluation_pipeline import create_evaluation_pipeline, TestCaseGenerator
 from models.rag_evaluator import EvaluationCriteria, create_rag_evaluator
@@ -59,12 +61,103 @@ def example_1_basic_evaluation():
     
     # Setup with custom log directory
     evaluator_configs = setup_example_config()
-    rag_agent = create_rag_agent(provider="chatopenai", model_name="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free", api_key=TOGETHER_API_KEY)
+
+    TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+    # Check if we should skip auto-processing on startup
+    SKIP_AUTO_PROCESSING = os.getenv("SKIP_AUTO_PROCESSING", "false").lower() == "true"
     
+    print(f"TOGETHER_API_KEY: {TOGETHER_API_KEY}")
+    print(f"SKIP_AUTO_PROCESSING: {SKIP_AUTO_PROCESSING}")
+
+    rag_app = get_app()
+    
+    config = {
+        "app_type": "rag_agent",
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "llm_provider": "chatopenai",
+        "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+        "persist_directory": "./chroma_db",
+        "collection_name": "demo_collection",
+        "api_key": TOGETHER_API_KEY,
+        "chats_by_session_id": {}
+    }
+    rag_app.initialize(**config)
+
+    # Initialize advanced retriever
+    # print("🚀 Initializing advanced retriever...")
+    # advanced_retriever = AdvancedRetriever(
+    #     vector_store=rag_app.vector_db.vector_database,
+    #     max_results=10,
+    #     enable_reranking=True,
+    #     similarity_threshold=0.7
+    # )
+    # print("✅ Advanced retriever initialized!")
+    
+    # Only auto-load data if not skipping auto-processing
+    if not SKIP_AUTO_PROCESSING:
+        print("🔄 Auto-processing enabled. Checking for data files...")
+        
+        # Check for preprocessed cleaned data first
+        cleaned_data_dir = Path("scripts/data_cleaning/cleaned_data")
+        # Filter out _info.json files - only get actual data files
+        cleaned_files = [f for f in cleaned_data_dir.glob("*.json") if not f.name.endswith("_info.json")] if cleaned_data_dir.exists() else []
+        
+        if cleaned_files:
+            print(f"📚 Found {len(cleaned_files)} preprocessed cleaned files. Loading...")
+            latest_cleaned = max(cleaned_files, key=os.path.getctime)
+            print(f"📁 Loading preprocessed data from: {latest_cleaned}")
+            try:
+                # Load preprocessed cleaned data directly
+                import json
+                with open(latest_cleaned, 'r') as f:
+                    cleaned_data = json.load(f)
+                
+                # Validate the data structure
+                if not isinstance(cleaned_data, list):
+                    raise ValueError(f"Expected list of documents, got {type(cleaned_data)}")
+                
+                if not cleaned_data:
+                    raise ValueError("No documents found in preprocessed file")
+                
+                # Verify first item has expected structure
+                if not isinstance(cleaned_data[0], dict) or 'page_content' not in cleaned_data[0]:
+                    raise ValueError("Invalid document structure in preprocessed file")
+                
+                # Convert to documents and add to vector DB
+                documents = []
+                for item in cleaned_data:
+                    doc = Document(
+                        page_content=item['page_content'],
+                        metadata=item['metadata']
+                    )
+                    documents.append(doc)
+                
+                rag_app.vector_db.add_documents(documents)
+                print(f"✅ Loaded {len(documents)} preprocessed document chunks")
+            except Exception as e:
+                print(f"⚠️ Failed to load preprocessed data from {latest_cleaned}: {e}")
+                print(f"🔍 Debug info: File exists={latest_cleaned.exists()}, Size={latest_cleaned.stat().st_size if latest_cleaned.exists() else 'N/A'}")
+        else:
+            # Fallback to raw data processing (only if no cleaned data available)
+            print("📁 No preprocessed data found. Checking for raw data...")
+            json_files = list(Path("scripts/data_collection/crawl_results").glob("*.json"))
+            if json_files:
+                latest_file = max(json_files, key=os.path.getctime)
+                print(f"📚 Loading raw data: {latest_file}")
+                try:
+                    # Basic loading only (no expensive cleaning)
+                    num_docs = rag_app.load_data_from_json(str(latest_file))
+                    print(f"✅ Loaded {num_docs} documents with basic processing")
+                    print("💡 Tip: Use 'python preprocess_data.py' to clean data offline for better performance")
+                except Exception as e:
+                    print(f"⚠️ Failed to load raw data: {e}")
+    else:
+        print("⏩ Auto-processing skipped. Use API endpoints to load data manually.")
+
     # Create logs directory in the examples folder
     log_dir = Path(__file__).parent / "logs" / "example_evaluation"
     pipeline = create_evaluation_pipeline(
-        rag_agent, 
+        rag_app, 
         evaluator_configs,
         log_dir=str(log_dir)
     )

@@ -245,11 +245,12 @@ You are here to support — not to replace professional therapy.
         result = self.graph.invoke(initial_state, config=config)
         
         # Extract the final AI message
-        final_message = result["messages"][-1]
-        if isinstance(final_message, AIMessage):
-            return final_message.content
-        else:
-            return "I apologize, but I couldn't generate a proper response."
+        # final_message = result["messages"][-1]
+        # if isinstance(final_message, AIMessage):
+        #     return final_message.content
+        # else:
+        #     return "I apologize, but I couldn't generate a proper response."
+        return result
     
     async def ainvoke(self, user_input: str, config: RunnableConfig) -> str:
         """Async version of invoke."""

@@ -587,14 +587,14 @@ async def startup_event():
         rag_app.initialize(**config)
 
         # Initialize advanced retriever
-        print("🚀 Initializing advanced retriever...")
-        advanced_retriever = AdvancedRetriever(
-            vector_store=rag_app.vector_db.vector_database,
-            max_results=10,
-            enable_reranking=True,
-            similarity_threshold=0.7
-        )
-        print("✅ Advanced retriever initialized!")
+        # print("🚀 Initializing advanced retriever...")
+        # advanced_retriever = AdvancedRetriever(
+        #     vector_store=rag_app.vector_db.vector_database,
+        #     max_results=10,
+        #     enable_reranking=True,
+        #     similarity_threshold=0.7
+        # )
+        # print("✅ Advanced retriever initialized!")
         
         # Only auto-load data if not skipping auto-processing
         if not SKIP_AUTO_PROCESSING:
