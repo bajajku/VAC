@@ -258,10 +258,54 @@ class Jury:
         if not successful_responses:
             return "No valid responses received from jury"
         
+        # For JSON responses (like evaluation scores), parse and compare semantically
+        parsed_responses = []
+        json_responses = []
+        
+        for response in successful_responses:
+            try:
+                # Try to extract and parse JSON from response
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group()
+                    parsed_json = json.loads(json_str)
+                    parsed_responses.append(parsed_json)
+                    json_responses.append(response)
+                else:
+                    # Not a JSON response, treat as plain text
+                    parsed_responses.append(response)
+                    json_responses.append(response)
+            except (json.JSONDecodeError, AttributeError):
+                # Failed to parse JSON, treat as plain text
+                parsed_responses.append(response)
+                json_responses.append(response)
+        
+        # Check for unanimous agreement
         if len(set(successful_responses)) == 1:
+            # Exact string match - perfect unanimity
             return successful_responses[0]
-        else:
-            return f"No unanimous agreement. Responses varied: {len(set(successful_responses))} different answers received."
+        
+        # For JSON responses, check if scores are unanimous even if formatting differs
+        if all(isinstance(resp, dict) and 'score' in resp for resp in parsed_responses):
+            scores = [resp['score'] for resp in parsed_responses]
+            if len(set(scores)) == 1:
+                # Unanimous score agreement - return the first response (they all have same score)
+                return json_responses[0]
+        
+        # No unanimity - for evaluation tasks, return average score in JSON format
+        if all(isinstance(resp, dict) and 'score' in resp for resp in parsed_responses):
+            avg_score = statistics.mean([resp['score'] for resp in parsed_responses])
+            combined_reasoning = " | ".join([resp.get('reasoning', '') for resp in parsed_responses])
+            avg_confidence = statistics.mean([resp.get('confidence', 0.5) for resp in parsed_responses])
+            
+            return json.dumps({
+                "score": round(avg_score, 1),
+                "reasoning": f"No unanimous agreement. Average of {len(parsed_responses)} responses: {combined_reasoning}",
+                "confidence": round(avg_confidence, 2)
+            })
+        
+        # For non-JSON responses, return the original behavior
+        return f"No unanimous agreement. Responses varied: {len(set(successful_responses))} different answers received."
     
     def _first_valid_vote(self, responses: List[Dict[str, Any]]) -> str:
         """Return the first valid response."""
