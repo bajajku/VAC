@@ -3,10 +3,13 @@ from models.rag_evaluator import RAGEvaluator, EvaluationCriteria, RAGEvaluation
 from models.rag_agent import RAGAgent
 from models.rag_chain import RAGChain
 from models.evaluation_logger import RAGEvaluationLogger
+from langchain_core.messages import ToolMessage, HumanMessage
+from utils.retriever import global_retriever
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 import json
 import time
+import re
 from datetime import datetime
 
 class RAGEvaluationPipeline:
@@ -62,14 +65,14 @@ class RAGEvaluationPipeline:
         self.logger.log_evaluation_start(query)
         
         try:
-            # Generate RAG response
+            # Generate RAG response and capture retrieved documents from actual execution
             start_time = time.time()
-            response = self._generate_rag_response(query)
+            response, retrieved_docs, tool_messages = self._generate_rag_response_with_docs(query)
             response_time = time.time() - start_time
             
-            # Extract or use provided context documents
+            # Use provided context documents or the retrieved ones
             if context_documents is None:
-                context_documents = self._extract_context_documents(query)
+                context_documents = retrieved_docs
             
             # Evaluate the response
             evaluation_report = self.evaluator.evaluate_rag_response(
@@ -85,6 +88,8 @@ class RAGEvaluationPipeline:
                 'evaluation_report': evaluation_report,
                 'expected_response': expected_response,
                 'context_documents': context_documents,
+                'retrieved_documents_metadata': self._extract_metadata_from_tool_messages(tool_messages),
+                'tool_execution_details': self._format_tool_execution_details(tool_messages),
                 'response_time': response_time,
                 'timestamp': datetime.now().isoformat()
             }
@@ -210,12 +215,140 @@ class RAGEvaluationPipeline:
         # Filter out None results
         return [result for result in results if result is not None]
     
-    def _generate_rag_response(self, query: str) -> str:
-        """Generate response using the RAG system."""
+    def _generate_rag_response_with_docs(self, query: str) -> tuple[str, List[str], List[ToolMessage]]:
+        """
+        Generate response using the RAG system and capture retrieved documents from actual execution.
+        
+        Returns:
+            tuple: (response, list of retrieved document contents, tool messages)
+        """
         try:
-            # if hasattr(self.rag_system, 'invoke'):
+            # Create the initial state with the user message
+            # initial_state = {
+            #     "messages": [HumanMessage(content=query)]
+            # }
+            
+            # Run the graph and capture all messages
+            result = self.rag_system.query(query)
+            print("result")
+            print("____________________")
+            print(result)
+            print("____________________")
+            if result:
+                print("Result Query is success")
+            else:
+                print("Result Query is failed")
+            # result = self.rag_system.query(query)
+            
+            # Extract the final AI message (response)
+            final_message = result["messages"][-1]
+            response = final_message.content if hasattr(final_message, 'content') else str(final_message)
+            
+            # Extract tool messages from the execution
+            tool_messages = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
+            
+            # Extract retrieved documents from tool messages
+            retrieved_docs = self._extract_documents_from_tool_messages(tool_messages)
+            
+            # Log the retrieval for debugging
+            self.logger.logger.info(f"Captured {len(retrieved_docs)} documents from RAG execution for query: {query[:50]}...")
+            
+            return response, retrieved_docs, tool_messages
+            
+        except Exception as e:
+            self.logger.log_error(f"Error generating RAG response with docs", e)
+            return f"Error generating response: {str(e)}", [], []
 
-            print(type(self.rag_system))
+    def _extract_documents_from_tool_messages(self, tool_messages: List[ToolMessage]) -> List[str]:
+        """
+        Extract document contents from tool messages.
+        
+        Args:
+            tool_messages: List of ToolMessage objects from RAG execution
+            
+        Returns:
+            List of document contents
+        """
+        documents = []
+        
+        for tool_msg in tool_messages:
+            if tool_msg.name == "retrieve_information":
+                # Parse the tool response to extract individual documents
+                content = tool_msg.content
+                
+                # Extract document sections from the formatted response
+                # The retrieve_information tool formats results as "**Source X** (from: ...): content"
+                source_pattern = r'\*\*Source \d+\*\*[^:]*:\s*(.*?)(?=\*\*Source \d+\*\*|\n\n📊|$)'
+                matches = re.findall(source_pattern, content, re.DOTALL)
+                
+                for match in matches:
+                    # Clean up the extracted content
+                    doc_content = match.strip()
+                    if doc_content and doc_content not in documents:
+                        documents.append(doc_content)
+        
+        return documents
+
+    def _extract_metadata_from_tool_messages(self, tool_messages: List[ToolMessage]) -> List[Dict[str, Any]]:
+        """
+        Extract metadata from tool messages for logging.
+        
+        Args:
+            tool_messages: List of ToolMessage objects from RAG execution
+            
+        Returns:
+            List of metadata dictionaries
+        """
+        metadata_list = []
+        
+        for tool_msg in tool_messages:
+            if tool_msg.name == "retrieve_information":
+                content = tool_msg.content
+                
+                # Extract source information from the formatted response
+                source_pattern = r'\*\*Source (\d+)\*\*\s*\(from:\s*([^)]+)\)[^:]*:\s*(.*?)(?=\*\*Source \d+\*\*|\n\n📊|$)'
+                matches = re.findall(source_pattern, content, re.DOTALL)
+                
+                for i, (source_num, source_file, doc_content) in enumerate(matches):
+                    doc_content = doc_content.strip()
+                    metadata = {
+                        'document_index': int(source_num) - 1,
+                        'source': source_file.strip(),
+                        'content_length': len(doc_content),
+                        'content_preview': doc_content[:200] + "..." if len(doc_content) > 200 else doc_content,
+                        'tool_call_id': tool_msg.tool_call_id,
+                        'extraction_method': 'from_tool_message'
+                    }
+                    metadata_list.append(metadata)
+        
+        return metadata_list
+
+    def _format_tool_execution_details(self, tool_messages: List[ToolMessage]) -> List[Dict[str, Any]]:
+        """
+        Format tool execution details for logging.
+        
+        Args:
+            tool_messages: List of ToolMessage objects from RAG execution
+            
+        Returns:
+            List of tool execution details
+        """
+        details = []
+        
+        for tool_msg in tool_messages:
+            detail = {
+                'tool_name': tool_msg.name,
+                'tool_call_id': tool_msg.tool_call_id,
+                'response_length': len(tool_msg.content),
+                'response_preview': tool_msg.content[:300] + "..." if len(tool_msg.content) > 300 else tool_msg.content
+            }
+            details.append(detail)
+        
+        return details
+
+    def _generate_rag_response(self, query: str) -> str:
+        """Generate response using the RAG system (legacy method)."""
+        try:
             response = self.rag_system.invoke(query)
             return response if isinstance(response, str) else str(response)
         except Exception as e:
