@@ -136,7 +136,7 @@ class HuggingFacePipelineLLM(BaseLLM):
             model=model,
             streamer=streamer,
             tokenizer=tokenizer,
-            return_full_text=True,  # langchain expects the full text
+            return_full_text=False,  # Only return generated text, not the input prompt
             task='text-generation',
             # we pass model parameters here too
             stopping_criteria=self.stopping_criteria,  # without this model rambles during chat
