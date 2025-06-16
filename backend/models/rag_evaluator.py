@@ -425,29 +425,62 @@ Provide ONLY a JSON response in this exact format:
             # Try to parse the consensus as JSON
             consensus_text = jury_result['consensus']
             
-            # Extract JSON from the response if it's embedded in text
-            json_match = re.search(r'\{.*\}', consensus_text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group()
-                parsed_result = json.loads(json_str)
-                
+            # Extract JSON from the response - find ALL JSON objects and use the last valid one
+            json_objects = []
+            json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+            matches = re.findall(json_pattern, consensus_text)
+            
+            # Try to parse each match and keep valid ones
+            for match in matches:
+                try:
+                    parsed = json.loads(match)
+                    # Validate it has the expected structure for evaluation
+                    if isinstance(parsed, dict) and 'score' in parsed:
+                        json_objects.append(parsed)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+            
+            if json_objects:
+                # Use the last valid JSON object (most likely to be the actual response)
+                parsed_result = json_objects[-1]
                 score = float(parsed_result.get('score', 5.0))
                 reasoning = parsed_result.get('reasoning', 'No reasoning provided')
                 confidence = float(parsed_result.get('confidence', 0.5))
             else:
-                # Fallback parsing if JSON format isn't found
-                score = self._extract_score_from_text(consensus_text)
-                reasoning = consensus_text
-                confidence = 0.5
+                # Fallback: try the old method with non-greedy matching
+                json_match = re.search(r'\{[^}]+\}', consensus_text)
+                if json_match:
+                    json_str = json_match.group()
+                    parsed_result = json.loads(json_str)
+                    score = float(parsed_result.get('score', 5.0))
+                    reasoning = parsed_result.get('reasoning', 'No reasoning provided')
+                    confidence = float(parsed_result.get('confidence', 0.5))
+                else:
+                    # Final fallback parsing if JSON format isn't found
+                    score = self._extract_score_from_text(consensus_text)
+                    reasoning = consensus_text[:200] + "..." if len(consensus_text) > 200 else consensus_text
+                    confidence = 0.5
             
             # Parse individual responses for additional insights
             individual_scores = []
             for response in jury_result.get('individual_responses', []):
                 if response['success']:
                     try:
-                        individual_json = re.search(r'\{.*\}', response['response'], re.DOTALL)
-                        if individual_json:
-                            individual_result = json.loads(individual_json.group())
+                        # Use the same improved JSON extraction for individual responses
+                        response_text = response['response']
+                        individual_json_objects = []
+                        individual_matches = re.findall(json_pattern, response_text)
+                        
+                        for match in individual_matches:
+                            try:
+                                parsed = json.loads(match)
+                                if isinstance(parsed, dict) and 'score' in parsed:
+                                    individual_json_objects.append(parsed)
+                            except (json.JSONDecodeError, ValueError):
+                                continue
+                        
+                        if individual_json_objects:
+                            individual_result = individual_json_objects[-1]
                             individual_scores.append({
                                 'provider': response['provider'],
                                 'model': response['model'],
@@ -455,7 +488,8 @@ Provide ONLY a JSON response in this exact format:
                                 'reasoning': individual_result.get('reasoning', ''),
                                 'confidence': individual_result.get('confidence', 0.5)
                             })
-                    except:
+                    except Exception as e:
+                        print(f"⚠️ Error parsing individual response from {response['provider']}: {e}")
                         continue
             
             return EvaluationResult(

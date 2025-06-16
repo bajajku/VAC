@@ -144,32 +144,19 @@ class Jury:
     def _get_parallel_responses(self, prompt: str) -> List[Dict[str, Any]]:
         """Get responses from all LLMs in parallel using ThreadPoolExecutor."""
         responses = []
-
-        print("Yes we are here")
         
         def query_llm(llm_index: int, llm: LLM) -> Dict[str, Any]:
             try:
                 chat = llm.create_chat()
-                print("____________________")
-                print(llm)
-                print("____________________")
-                print(type(chat))
-                print("____________________")
                 response = chat.invoke(prompt)
-                print("____________________")
-                print(f"RAW RESPONSE FROM {llm.provider}/{llm.model_name}:")
-                print(response)
-                print("____________________")
                 
                 # Extract content with better debugging
                 if hasattr(response, 'content'):
                     response_content = response.content
-                    print(f"CONTENT EXTRACTED: {response_content[:200]}...")
                 else:
                     response_content = str(response)
-                    print(f"STRING CONVERSION: {response_content[:200]}...")
                 
-                result = {
+                return {
                     'index': llm_index,
                     'response': response_content,
                     'provider': llm.provider,
@@ -177,13 +164,9 @@ class Jury:
                     'success': True,
                     'error': None
                 }
-                print(f"SUCCESS RESULT FOR {llm.provider}: {result['success']}")
-                return result
             except Exception as e:
                 print(f"❌ ERROR in {llm.provider}/{llm.model_name}: {e}")
                 print(f"   Error type: {type(e).__name__}")
-                import traceback
-                traceback.print_exc()
                 
                 return {
                     'index': llm_index,
@@ -203,17 +186,16 @@ class Jury:
             for future in as_completed(future_to_llm):
                 response = future.result()
                 responses.append(response)
-                print(f"COLLECTED RESPONSE FROM {response['provider']}: success={response['success']}")
         
         # Sort by index to maintain order
         responses.sort(key=lambda x: x['index'])
         
-        # Debug: Print summary of all responses
-        print(f"FINAL RESPONSES SUMMARY:")
-        for i, resp in enumerate(responses):
-            print(f"  {i}: {resp['provider']}/{resp['model']} - success: {resp['success']}")
-            if not resp['success']:
-                print(f"      Error: {resp['error']}")
+        # Log any failed responses
+        failed_responses = [r for r in responses if not r['success']]
+        if failed_responses:
+            print(f"⚠️ {len(failed_responses)} jury member(s) failed to respond:")
+            for resp in failed_responses:
+                print(f"   {resp['provider']}/{resp['model']}: {resp['error']}")
         
         return responses
     
@@ -261,16 +243,6 @@ class Jury:
     
     def _weighted_vote(self, responses: List[Dict[str, Any]]) -> str:
         """Weighted voting - can assign weights based on model reliability."""
-        print(f"🗳️ WEIGHTED VOTE - Processing {len(responses)} responses:")
-        for i, resp in enumerate(responses):
-            print(f"  Response {i}: {resp['provider']}/{resp['model']} - success: {resp['success']}")
-            if resp['success'] and resp['response']:
-                print(f"    Content preview: {resp['response'][:100]}...")
-            elif resp['success']:
-                print(f"    Success but no content: {resp['response']}")
-            else:
-                print(f"    Failed: {resp['error']}")
-        
         # Default equal weights, but you can customize this
         weights = {
             'openai': 1.2,
@@ -282,11 +254,12 @@ class Jury:
         }
         
         weighted_responses = {}
+        successful_count = 0
         for response in responses:
             if response['success'] and response['response']:
                 content = response['response']
                 weight = weights.get(response['provider'], 1.0)
-                print(f"  Adding weighted response from {response['provider']} (weight: {weight})")
+                successful_count += 1
                 
                 if content in weighted_responses:
                     weighted_responses[content] += weight
@@ -294,11 +267,11 @@ class Jury:
                     weighted_responses[content] = weight
         
         if not weighted_responses:
-            print("  ❌ No valid weighted responses found!")
+            print("⚠️ No valid responses received from jury")
             return "No valid responses received from jury"
         
         result = max(weighted_responses, key=weighted_responses.get)
-        print(f"  ✅ Weighted vote result: {len(weighted_responses)} unique responses processed")
+        print(f"✅ Jury consensus from {successful_count}/{len(responses)} members")
         return result
     
     def _unanimous_vote(self, responses: List[Dict[str, Any]]) -> str:
