@@ -148,7 +148,15 @@ class Jury:
         def query_llm(llm_index: int, llm: LLM) -> Dict[str, Any]:
             try:
                 chat = llm.create_chat()
+                print("____________________")
+                print(llm)
+                print("____________________")
+                print(type(chat))
+                print("____________________")
                 response = chat.invoke(prompt)
+                print("____________________")
+                print(response)
+                print("____________________")
                 return {
                     'index': llm_index,
                     'response': response.content if hasattr(response, 'content') else str(response),
