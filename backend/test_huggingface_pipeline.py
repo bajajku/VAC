@@ -217,6 +217,127 @@ def test_jury_integration():
         traceback.print_exc()
         return False
 
+def test_huggingface_json_response():
+    """Test HuggingFace pipeline with JSON evaluation prompt"""
+    print("=" * 60)
+    print("TEST: HuggingFace JSON Response")
+    print("=" * 60)
+    
+    try:
+        # Create HuggingFace pipeline LLM
+        llm = LLM(
+            provider="huggingface_pipeline",
+            model_name="mistralai/Mistral-7B-Instruct-v0.3",
+            quantization=False
+        )
+        
+        print("✅ HuggingFace LLM created successfully!")
+        
+        # Test with evaluation-style JSON prompt
+        json_prompt = """
+EVALUATION TASK: RETRIEVAL_RELEVANCE
+
+Query: What are the symptoms of PTSD in military veterans?
+
+Response: Symptoms include flashbacks, avoidance, hypervigilance, sleep issues, irritability, and guilt.
+
+Context Documents:
+Document 1: Information about military housing
+Document 2: Mental health tips during distancing
+
+Evaluate the RELEVANCE of the retrieved documents to the query on a scale of 0-10.
+
+Scoring Guidelines:
+- 9-10: Documents are highly relevant and directly address the query
+- 7-8: Documents are mostly relevant with some useful information
+- 5-6: Documents are somewhat relevant but may miss key aspects
+- 3-4: Documents are loosely related but not very helpful
+- 0-2: Documents are irrelevant or completely off-topic
+
+Provide ONLY a JSON response in this exact format:
+{"score": [0-10], "reasoning": "[Your detailed reasoning]", "confidence": [0-1]}
+"""
+        
+        print("📝 Testing with JSON evaluation prompt...")
+        chat = llm.create_chat()
+        
+        print(f"Chat type: {type(chat)}")
+        
+        response = chat.invoke(json_prompt)
+        
+        print("🔍 RAW RESPONSE:")
+        print(f"Type: {type(response)}")
+        print(f"Response: {response}")
+        
+        if hasattr(response, 'content'):
+            print(f"Content: {response.content}")
+        
+        if hasattr(response, '__dict__'):
+            print(f"Attributes: {response.__dict__}")
+        
+        # Try to extract content like the jury does
+        if hasattr(response, 'content'):
+            response_content = response.content
+        else:
+            response_content = str(response)
+            
+        print(f"🎯 EXTRACTED CONTENT:")
+        print(response_content)
+        
+        # Test JSON parsing like the evaluator does
+        import re
+        import json
+        json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            print(f"🔧 FOUND JSON: {json_str}")
+            try:
+                parsed_result = json.loads(json_str)
+                print(f"✅ PARSED JSON: {parsed_result}")
+            except Exception as e:
+                print(f"❌ JSON PARSE ERROR: {e}")
+        else:
+            print("❌ NO JSON FOUND IN RESPONSE")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        print(f"Error type: {type(e).__name__}")
+        traceback.print_exc()
+        return False
+
+def test_simple_response():
+    """Test with simple prompt to see basic response format"""
+    print("\n" + "=" * 60)
+    print("TEST: Simple Response Format")
+    print("=" * 60)
+    
+    try:
+        llm = LLM(
+            provider="huggingface_pipeline",
+            model_name="mistralai/Mistral-7B-Instruct-v0.3",
+            quantization=False
+        )
+        
+        chat = llm.create_chat()
+        simple_prompt = "What is 2+2? Answer with just the number."
+        
+        response = chat.invoke(simple_prompt)
+        
+        print(f"Simple response type: {type(response)}")
+        print(f"Simple response: {response}")
+        
+        if hasattr(response, 'content'):
+            print(f"Simple content: {response.content}")
+            
+        return True
+        
+    except Exception as e:
+        print(f"❌ Simple test failed: {e}")
+        traceback.print_exc()
+        return False
+
 def main():
     """Main test function."""
     print("🚀 HUGGINGFACE PIPELINE LLM TESTING")
@@ -263,6 +384,14 @@ def main():
     # Test 4: Jury integration
     jury_success = test_jury_integration()
     test_results.append(("Jury integration", jury_success))
+    
+    # Test JSON response
+    json_success = test_huggingface_json_response()
+    test_results.append(("JSON response", json_success))
+    
+    # Test simple response
+    simple_success = test_simple_response()
+    test_results.append(("Simple response", simple_success))
     
     # Summary
     print("\n" + "=" * 60)
