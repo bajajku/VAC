@@ -233,7 +233,6 @@ class RAGEvaluationPipeline:
             print("result")
             print("____________________")
             print(result)
-            print("____________________")
             if result:
                 print("Result Query is success")
             else:
