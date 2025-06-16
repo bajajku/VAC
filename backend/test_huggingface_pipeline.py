@@ -123,7 +123,8 @@ def test_llm_response(llm, test_name):
         
         print(f"   Prompt: {test_prompt}")
         response = chat.invoke(test_prompt)
-        
+        print("____________________")
+        print(response)
         # Handle different response types
         if hasattr(response, 'content'):
             response_text = response.content
