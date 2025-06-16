@@ -144,6 +144,8 @@ class Jury:
     def _get_parallel_responses(self, prompt: str) -> List[Dict[str, Any]]:
         """Get responses from all LLMs in parallel using ThreadPoolExecutor."""
         responses = []
+
+        print("Yes we are here")
         
         def query_llm(llm_index: int, llm: LLM) -> Dict[str, Any]:
             try:
