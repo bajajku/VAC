@@ -49,17 +49,13 @@ class RAGEvaluator:
     
     def __init__(self, jury_configs: List[Dict[str, Any]], **kwargs):
         """
-        Initialize RAG evaluator with specialized juries for different evaluation types.
+        Initialize RAG evaluator with a single jury for all evaluations.
         
         Args:
             jury_configs: Configuration for evaluation jury
         """
-        # Main evaluation jury
-        self.evaluation_jury = create_jury(jury_configs, voting_strategy="weighted")
-        
-        # Specialized juries for different evaluation aspects
-        self.safety_jury = create_jury(jury_configs, voting_strategy="unanimous")  # For safety-critical evaluations
-        self.quality_jury = create_jury(jury_configs, voting_strategy="majority")   # For quality assessments
+        # Single jury for all evaluations - simpler and more efficient
+        self.jury = create_jury(jury_configs, voting_strategy="weighted")
         
         # Evaluation prompts and weights
         self.criterion_weights = self._initialize_criterion_weights()
@@ -70,16 +66,17 @@ class RAGEvaluator:
         """Initialize weights for different evaluation criteria."""
         return {
             EvaluationCriteria.RETRIEVAL_RELEVANCE.value: 1.0,
-            EvaluationCriteria.HALLUCINATION.value: 1.2,  # Higher weight for critical issues
-            EvaluationCriteria.NOISE_ROBUSTNESS.value: 0.9,
+            EvaluationCriteria.RETRIEVAL_DIVERSITY.value: 1.0,
+            EvaluationCriteria.HALLUCINATION.value: 1.0,  # Higher weight for critical issues
+            EvaluationCriteria.NOISE_ROBUSTNESS.value: 1.0,
             EvaluationCriteria.NEGATIVE_REJECTION.value: 1.0,
             EvaluationCriteria.INFORMATION_INTEGRATION.value: 1.0,
-            EvaluationCriteria.COUNTERFACTUAL_ROBUSTNESS.value: 1.1,
-            EvaluationCriteria.PRIVACY_BREACH.value: 1.5,  # Critical for safety
-            EvaluationCriteria.MALICIOUS_USE.value: 1.5,   # Critical for safety
-            EvaluationCriteria.SECURITY_BREACH.value: 1.4,
-            EvaluationCriteria.OUT_OF_DOMAIN.value: 0.8,
-            EvaluationCriteria.COMPLETENESS.value: 0.9,
+            EvaluationCriteria.COUNTERFACTUAL_ROBUSTNESS.value: 1.0,
+            EvaluationCriteria.PRIVACY_BREACH.value: 1.0,  # Critical for safety
+            EvaluationCriteria.MALICIOUS_USE.value: 1.0,   # Critical for safety
+            EvaluationCriteria.SECURITY_BREACH.value: 1.0,
+            EvaluationCriteria.OUT_OF_DOMAIN.value: 1.0,
+            EvaluationCriteria.COMPLETENESS.value: 1.0,
             EvaluationCriteria.BRAND_DAMAGE.value: 1.0
         }
     
@@ -117,7 +114,7 @@ class RAGEvaluator:
             overall_score=overall_score,
             evaluation_results=evaluation_results,
             timestamp=datetime.now().isoformat(),
-            jury_composition=self.evaluation_jury.get_jury_info()
+            jury_composition=self.jury.get_jury_info()
         )
     
     def _evaluate_single_criterion(self, 
@@ -127,18 +124,11 @@ class RAGEvaluator:
                                  criterion: EvaluationCriteria) -> EvaluationResult:
         """Evaluate a single criterion using appropriate jury."""
         
-        # Select appropriate jury based on criterion type
-        if criterion in [EvaluationCriteria.PRIVACY_BREACH, EvaluationCriteria.MALICIOUS_USE, 
-                        EvaluationCriteria.SECURITY_BREACH]:
-            jury = self.safety_jury
-        else:
-            jury = self.quality_jury
-        
         # Get criterion-specific prompt
         evaluation_prompt = self._build_evaluation_prompt(query, response, context_docs, criterion)
         
         # Get jury evaluation
-        jury_result = jury.deliberate(evaluation_prompt, return_individual_responses=True)
+        jury_result = self.jury.deliberate(evaluation_prompt, return_individual_responses=True)
         
         # Parse and structure the result
         return self._parse_evaluation_result(jury_result, criterion)
