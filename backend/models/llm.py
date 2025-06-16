@@ -67,14 +67,18 @@ class HuggingFacePipelineLLM(BaseLLM):
             'do_sample': True
         }
         default_config.update(kwargs)
-        super().__init__(model_name, **default_config)
+        
+        # Initialize required attributes before calling parent constructor
         self.quantization = quantization
-        self.huggingface_api_token = huggingface_api_token
-        self.model, self.tokenizer = self.create_model()
+        self.huggingface_api_token = huggingface_api_token or os.getenv("HUGGINGFACE_TOKEN") or os.getenv("HF_TOKEN")
+        self.model, self.tokenizer = self.create_model(model_name)
         self.stopping_criteria = self.create_stopping_criteria()
-        self.pipeline = self.create_pipeline(self.model, self.tokenizer)
+        self.pipeline = self.create_pipeline(self.model, self.tokenizer, default_config)
+        
+        # Now call parent constructor which will call create_llm()
+        super().__init__(model_name, **default_config)
 
-    def create_model(self):
+    def create_model(self, model_name: str):
         if self.quantization:
             from torch import bfloat16
             bnb_config = transformers.BitsAndBytesConfig(
@@ -84,10 +88,10 @@ class HuggingFacePipelineLLM(BaseLLM):
                 bnb_4bit_compute_dtype=bfloat16
             )
 
-            model_config = transformers.AutoConfig.from_pretrained(self.model_name, use_auth_token=self.huggingface_api_token)
+            model_config = transformers.AutoConfig.from_pretrained(model_name, use_auth_token=self.huggingface_api_token)
 
             model = transformers.AutoModelForCausalLM.from_pretrained(
-                self.model_name,
+                model_name,
                 trust_remote_code=True,
                 config=model_config,
                 quantization_config=bnb_config,
@@ -96,7 +100,22 @@ class HuggingFacePipelineLLM(BaseLLM):
             )
 
             tokenizer = transformers.AutoTokenizer.from_pretrained(
-                self.model_name,
+                model_name,
+                use_auth_token=self.huggingface_api_token
+            )
+
+            return model, tokenizer
+        else:
+            # Load model without quantization
+            model = transformers.AutoModelForCausalLM.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+                device_map='auto',
+                use_auth_token=self.huggingface_api_token
+            )
+
+            tokenizer = transformers.AutoTokenizer.from_pretrained(
+                model_name,
                 use_auth_token=self.huggingface_api_token
             )
 
@@ -111,7 +130,7 @@ class HuggingFacePipelineLLM(BaseLLM):
 
 
 
-    def create_pipeline(self, model, tokenizer):
+    def create_pipeline(self, model, tokenizer, config):
         streamer = transformers.TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
         generate_text_pipeline = transformers.pipeline(
             model=model,
@@ -121,9 +140,9 @@ class HuggingFacePipelineLLM(BaseLLM):
             task='text-generation',
             # we pass model parameters here too
             stopping_criteria=self.stopping_criteria,  # without this model rambles during chat
-            temperature=self.config['temperature'] if 'temperature' in self.config else 0.7,
-            max_new_tokens=self.config['max_new_tokens'] if 'max_new_tokens' in self.config else 512,
-            repetition_penalty=self.config['repetition_penalty'] if 'repetition_penalty' in self.config else 1.1
+            temperature=config['temperature'] if 'temperature' in config else 0.7,
+            max_new_tokens=config['max_new_tokens'] if 'max_new_tokens' in config else 512,
+            repetition_penalty=config['repetition_penalty'] if 'repetition_penalty' in config else 1.1
         )   
         return generate_text_pipeline
     
@@ -135,7 +154,7 @@ class HuggingFaceEndpointLLM(BaseLLM):
     """HuggingFace Endpoint implementation."""
     
     def __init__(self, model_name: str, huggingfacehub_api_token: str = None, **kwargs):
-        self.api_token = huggingfacehub_api_token
+        self.api_token = huggingfacehub_api_token or os.getenv("HUGGINGFACE_HUB_TOKEN") or os.getenv("HF_TOKEN")
         # Set default config for HF Endpoint
         default_config = {
             'temperature': 0.7,

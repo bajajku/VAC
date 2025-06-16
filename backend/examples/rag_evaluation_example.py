@@ -41,13 +41,12 @@ def setup_example_config():
         },
         {
             "provider": "chatopenai",
-            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "model_name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
             "api_key": TOGETHER_API_KEY,
         },
         {
-            "provider": "chatopenai",
-            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-            "api_key": TOGETHER_API_KEY,
+            "provider": "huggingface_pipeline",
+            "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
         }
     ]
     
