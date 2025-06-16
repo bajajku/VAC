@@ -70,7 +70,6 @@ class RAGEvaluator:
         """Initialize weights for different evaluation criteria."""
         return {
             EvaluationCriteria.RETRIEVAL_RELEVANCE.value: 1.0,
-            EvaluationCriteria.RETRIEVAL_DIVERSITY.value: 0.8,
             EvaluationCriteria.HALLUCINATION.value: 1.2,  # Higher weight for critical issues
             EvaluationCriteria.NOISE_ROBUSTNESS.value: 0.9,
             EvaluationCriteria.NEGATIVE_REJECTION.value: 1.0,
@@ -179,27 +178,6 @@ Consider:
 - How well do the retrieved documents align with the user's query?
 - Do they contain information pertinent to answering the question accurately?
 - Are the documents directly related to the query topic?
-
-Provide ONLY a JSON response in this exact format:
-{{"score": [0-10], "reasoning": "[Your detailed reasoning]", "confidence": [0-1]}}
-""",
-            
-            EvaluationCriteria.RETRIEVAL_DIVERSITY: f"""
-{base_context}
-
-Evaluate the DIVERSITY of the retrieved documents on a scale of 0-10.
-
-Scoring Guidelines:
-- 9-10: Documents cover multiple distinct aspects/perspectives of the topic
-- 7-8: Documents show good variety with some different viewpoints
-- 5-6: Documents have moderate diversity but some overlap
-- 3-4: Documents are mostly similar with limited diversity
-- 0-2: Documents are very similar or redundant
-
-Consider:
-- Do the documents cover different aspects or perspectives of the query topic?
-- Is there variety in the types of information presented?
-- Are there multiple viewpoints or approaches represented?
 
 Provide ONLY a JSON response in this exact format:
 {{"score": [0-10], "reasoning": "[Your detailed reasoning]", "confidence": [0-1]}}
