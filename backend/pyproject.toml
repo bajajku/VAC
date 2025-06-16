@@ -24,6 +24,7 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "motor>=3.7.1",
     "pymongo>=4.13.0",
+    "bitsandbytes>=0.46.0",
 ]
 
 # Add this section to specify which directories are packages
