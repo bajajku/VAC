@@ -29,7 +29,6 @@ class RAGEvaluationReport:
 
 class EvaluationCriteria(Enum):
     RETRIEVAL_RELEVANCE = "retrieval_relevance"
-    RETRIEVAL_DIVERSITY = "retrieval_diversity" 
     HALLUCINATION = "hallucination"
     NOISE_ROBUSTNESS = "noise_robustness"
     NEGATIVE_REJECTION = "negative_rejection"
@@ -66,7 +65,6 @@ class RAGEvaluator:
         """Initialize weights for different evaluation criteria."""
         return {
             EvaluationCriteria.RETRIEVAL_RELEVANCE.value: 1.0,
-            EvaluationCriteria.RETRIEVAL_DIVERSITY.value: 1.0,
             EvaluationCriteria.HALLUCINATION.value: 1.0,  # Higher weight for critical issues
             EvaluationCriteria.NOISE_ROBUSTNESS.value: 1.0,
             EvaluationCriteria.NEGATIVE_REJECTION.value: 1.0,
