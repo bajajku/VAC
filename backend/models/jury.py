@@ -253,26 +253,92 @@ class Jury:
             'chatopenai': 1.0
         }
         
-        weighted_responses = {}
         successful_count = 0
+        weighted_scores = []
+        weighted_reasoning = []
+        weighted_confidence = []
+        json_responses = []
+        text_responses = {}
+        
+        # Try to parse responses as JSON first (for evaluation scores)
         for response in responses:
             if response['success'] and response['response']:
                 content = response['response']
                 weight = weights.get(response['provider'], 1.0)
                 successful_count += 1
                 
-                if content in weighted_responses:
-                    weighted_responses[content] += weight
-                else:
-                    weighted_responses[content] = weight
+                # Try to parse as JSON evaluation score
+                try:
+                    # Use the same JSON extraction logic as the evaluator
+                    json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+                    matches = re.findall(json_pattern, content)
+                    
+                    parsed_json = None
+                    for match in matches:
+                        try:
+                            parsed = json.loads(match)
+                            if isinstance(parsed, dict) and 'score' in parsed:
+                                parsed_json = parsed
+                                break
+                        except (json.JSONDecodeError, ValueError):
+                            continue
+                    
+                    if parsed_json:
+                        # It's a JSON evaluation - extract score, reasoning, confidence
+                        score = float(parsed_json.get('score', 5.0))
+                        reasoning = parsed_json.get('reasoning', '')
+                        confidence = float(parsed_json.get('confidence', 0.5))
+                        
+                        weighted_scores.append((score, weight))
+                        weighted_reasoning.append((reasoning, weight))
+                        weighted_confidence.append((confidence, weight))
+                        json_responses.append(response['provider'])
+                    else:
+                        raise ValueError("Not a JSON evaluation response")
+                        
+                except:
+                    # Fall back to text-based voting for non-JSON responses
+                    if content in text_responses:
+                        text_responses[content] += weight
+                    else:
+                        text_responses[content] = weight
         
-        if not weighted_responses:
+        # If we have JSON evaluation responses, calculate weighted averages
+        if weighted_scores:
+            # Calculate weighted average score
+            total_score_weight = sum(weight for _, weight in weighted_scores)
+            avg_score = sum(score * weight for score, weight in weighted_scores) / total_score_weight
+            
+            # Calculate weighted average confidence
+            total_conf_weight = sum(weight for _, weight in weighted_confidence)
+            avg_confidence = sum(conf * weight for conf, weight in weighted_confidence) / total_conf_weight
+            
+            # Combine reasoning with weights (simple concatenation for now)
+            reasoning_parts = []
+            for reasoning, weight in weighted_reasoning:
+                if reasoning:  # Only include non-empty reasoning
+                    provider = json_responses[len(reasoning_parts)] if len(reasoning_parts) < len(json_responses) else "unknown"
+                    reasoning_parts.append(f"[{provider}:{weight:.1f}w] {reasoning}")
+            
+            combined_reasoning = " | ".join(reasoning_parts) if reasoning_parts else "No detailed reasoning provided"
+            
+            # Return weighted average as JSON
+            result = json.dumps({
+                "score": round(avg_score, 1),
+                "reasoning": f"Weighted average of {len(weighted_scores)} evaluations: {combined_reasoning}",
+                "confidence": round(avg_confidence, 2)
+            })
+            print(f"✅ Jury weighted average from {successful_count}/{len(responses)} members: {avg_score:.1f}/10")
+            return result
+        
+        # Fall back to text-based voting for non-evaluation responses
+        elif text_responses:
+            result = max(text_responses, key=text_responses.get)
+            print(f"✅ Jury text consensus from {successful_count}/{len(responses)} members")
+            return result
+        else:
             print("⚠️ No valid responses received from jury")
             return "No valid responses received from jury"
-        
-        result = max(weighted_responses, key=weighted_responses.get)
-        print(f"✅ Jury consensus from {successful_count}/{len(responses)} members")
-        return result
     
     def _unanimous_vote(self, responses: List[Dict[str, Any]]) -> str:
         """Require unanimous agreement, otherwise return aggregated response."""
