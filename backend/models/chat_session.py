@@ -76,7 +76,7 @@ class ChatSessionService:
             "metadata": created_doc.get("metadata", {}),
             "messages": []
         }
-        return ChatSessionResponse(**session_data)
+        return ChatSessionResponse(**response_data)
 
     async def get_session(self, session_id: str) -> Optional[ChatSessionResponse]:
         """Get a chat session by ID"""
@@ -206,19 +206,53 @@ class ChatSessionService:
         """List chat sessions, optionally filtered by user"""
         collection = mongodb_config.get_collection(self.collection_name)
         
-        query = {}
+        # Build aggregation pipeline for efficient single-query operation
+        match_stage = {}
         if user_id:
-            query["user_id"] = user_id
+            match_stage["user_id"] = user_id
         
-        cursor = collection.find(query).sort("updated_at", -1).limit(limit)
+        pipeline = [
+            {"$match": match_stage},
+            {"$sort": {"updated_at": -1}},
+            {"$limit": limit},
+            {
+                "$lookup": {
+                    "from": self.messages_collection_name,
+                    "localField": "session_id",
+                    "foreignField": "session_id",
+                    "as": "messages",
+                    "pipeline": [
+                        {"$sort": {"timestamp": 1}}  # Sort messages by timestamp
+                    ]
+                }
+            },
+            {
+                "$addFields": {
+                    "actual_message_count": {"$size": "$messages"},
+                    "preview_messages": {"$slice": ["$messages", -5]}  # Last 5 messages for preview
+                }
+            }
+        ]
+        
+        cursor = collection.aggregate(pipeline)
         sessions = []
         
         async for doc in cursor:
-            # Get message count and latest messages
-            messages = await self.get_session_messages(doc["session_id"])
-            
-            # Use actual message count instead of stored count to ensure accuracy
-            actual_message_count = len(messages)
+            # Convert message documents to ChatMessage objects
+            preview_messages = []
+            for msg_doc in doc.get("preview_messages", []):
+                try:
+                    message_data = {
+                        "id": str(msg_doc["_id"]),
+                        "content": msg_doc.get("content", ""),
+                        "sender": msg_doc.get("sender", "user"),
+                        "timestamp": msg_doc.get("timestamp", datetime.utcnow()),
+                        "metadata": msg_doc.get("metadata", {})
+                    }
+                    preview_messages.append(ChatMessage(**message_data))
+                except Exception as e:
+                    print(f"Error processing preview message: {e}")
+                    continue
             
             # Create session response with explicit field mapping
             session_data = {
@@ -228,9 +262,9 @@ class ChatSessionService:
                 "user_id": doc.get("user_id"),
                 "created_at": doc.get("created_at", datetime.utcnow()),
                 "updated_at": doc.get("updated_at", datetime.utcnow()),
-                "message_count": actual_message_count,  # Use actual count
+                "message_count": doc.get("actual_message_count", 0),
                 "metadata": doc.get("metadata", {}),
-                "messages": messages[-5:] if len(messages) > 5 else messages  # Last 5 messages for preview
+                "messages": preview_messages
             }
             sessions.append(ChatSessionResponse(**session_data))
         

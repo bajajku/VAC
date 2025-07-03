@@ -12,6 +12,7 @@ import { sessionService } from '../../services/sessionService';
 
 dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const INITIAL_GREETING = "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?";
 
 type QuestionAnswer = {
   question: string;
