@@ -26,6 +26,12 @@ from models.feedback import (
     feedback_service
 )
 
+# Chat Session imports
+from models.chat_session import (
+    ChatSessionCreate, ChatSessionResponse, ChatSessionUpdate, ChatMessage,
+    chat_session_service
+)
+
 load_dotenv()
 
 # Pydantic models for API
@@ -65,6 +71,10 @@ class FeedbackRequest(BaseModel):
     feedback_text: Optional[str] = None
     rating: Optional[int] = None
     user_id: Optional[str] = None
+
+class NewSessionRequest(BaseModel):
+    user_id: Optional[str] = None
+    title: Optional[str] = None
 
 # Initialize FastAPI app
 app_api = FastAPI(
@@ -313,22 +323,55 @@ async def stream_query(request: QueryRequest):
         import uuid
         session_id = str(uuid.uuid4())
     
-    
-    def event_stream():
+    async def event_stream():
         # Send session_id first
         yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
+        
+        # Ensure session exists in MongoDB
+        try:
+            await chat_session_service.get_or_create_session(session_id)
+        except Exception as e:
+            print(f"Warning: Could not create/access session in MongoDB: {e}")
+        
+        # Store user message
+        try:
+            user_message = ChatMessage(
+                content=request.question,
+                sender="user",
+                timestamp=datetime.utcnow()
+            )
+            await chat_session_service.add_message(session_id, user_message)
+        except Exception as e:
+            print(f"Warning: Could not store user message: {e}")
+        
+        # Collect the full AI response
+        full_response = ""
         
         # Stream the response with session support
         for chunk in rag_app.stream_query(request.question, session_id):
             # Only stream the final AI messages (not tool calls or intermediate messages)
             
             if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
-                yield f"data: {chunk[0].content}\n\n"
+                content = chunk[0].content
+                full_response += content
+                yield f"data: {content}\n\n"
             
             if isinstance(chunk[0], ToolMessage):
                 sources = extract_sources_from_toolmessage(chunk[0].content)
                 for source in sources:
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
+        
+        # Store AI response after streaming is complete
+        try:
+            if full_response.strip():
+                ai_message = ChatMessage(
+                    content=full_response,
+                    sender="assistant",
+                    timestamp=datetime.utcnow()
+                )
+                await chat_session_service.add_message(session_id, ai_message)
+        except Exception as e:
+            print(f"Warning: Could not store AI message: {e}")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -692,6 +735,91 @@ async def get_feedback_stats(limit: int = 10):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving feedback stats: {str(e)}")
+
+# =============================================================================
+# CHAT SESSION ENDPOINTS
+# =============================================================================
+
+@app_api.post("/sessions/new", response_model=ChatSessionResponse)
+async def create_new_session(request: NewSessionRequest):
+    """Create a new chat session."""
+    try:
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        session_data = ChatSessionCreate(
+            session_id=session_id,
+            user_id=request.user_id,
+            title=request.title or f"Chat Session {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        
+        session = await chat_session_service.create_session(session_data)
+        return session
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating new session: {str(e)}")
+
+@app_api.get("/sessions", response_model=List[ChatSessionResponse])
+async def list_sessions(user_id: Optional[str] = None, limit: int = 20):
+    """List chat sessions, optionally filtered by user."""
+    try:
+        sessions = await chat_session_service.list_sessions(user_id=user_id, limit=limit)
+        return sessions
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+@app_api.get("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def get_session(session_id: str):
+    """Get a specific chat session with all messages."""
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+@app_api.get("/sessions/{session_id}/messages", response_model=List[ChatMessage])
+async def get_session_messages(session_id: str):
+    """Get all messages for a specific session."""
+    try:
+        messages = await chat_session_service.get_session_messages(session_id)
+        return messages
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session messages: {str(e)}")
+
+@app_api.put("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_session(session_id: str, update_data: ChatSessionUpdate):
+    """Update a chat session (title, metadata)."""
+    try:
+        session = await chat_session_service.update_session(session_id, update_data)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating session: {str(e)}")
+
+@app_api.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a chat session and all its messages."""
+    try:
+        success = await chat_session_service.delete_session(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"message": "Session deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
 
 # For running with uvicorn
 if __name__ == "__main__":
