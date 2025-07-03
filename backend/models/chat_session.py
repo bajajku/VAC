@@ -65,7 +65,7 @@ class ChatSessionService:
         created_doc = await collection.find_one({"_id": result.inserted_id})
         
         # Create session response with explicit field mapping
-        session_data = {
+        response_data = {
             "id": str(created_doc["_id"]),
             "session_id": created_doc.get("session_id", ""),
             "title": created_doc.get("title"),
