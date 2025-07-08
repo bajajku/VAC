@@ -15,6 +15,13 @@ class ChatMessage(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
+class ChatTurn(BaseModel):
+    """Chat turn model"""
+    user_message: ChatMessage = Field(..., description="User message")
+    assistant_message: ChatMessage = Field(..., description="Assistant message")
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+
 class ChatSessionBase(BaseModel):
     """Base chat session model"""
     session_id: str = Field(..., description="Unique session identifier")
@@ -49,6 +56,28 @@ class ChatSessionService:
     def __init__(self):
         self.collection_name = "chat_sessions"
         self.messages_collection_name = "chat_messages"
+
+    async def initialize(self):
+        """Initialize indexes and other setup requirements"""
+        try:
+            # Get collections
+            sessions_collection = mongodb_config.get_collection(self.collection_name)
+            messages_collection = mongodb_config.get_collection(self.messages_collection_name)
+            
+            # Create indexes for chat sessions
+            await sessions_collection.create_index("user_id")  # For user's sessions
+            await sessions_collection.create_index("session_id", unique=True)  # Unique session IDs
+            await sessions_collection.create_index("updated_at")  # For sorting by last activity
+            
+            # Create indexes for messages
+            await messages_collection.create_index([("session_id", 1), ("timestamp", 1)])  # For retrieving messages in order
+            await messages_collection.create_index("timestamp")  # For global message queries
+            
+            print("✅ Created indexes for chat sessions and messages")
+            return True
+        except Exception as e:
+            print(f"⚠️ Failed to create indexes: {e}")
+            return False
 
     async def create_session(self, session_data: ChatSessionCreate) -> ChatSessionResponse:
         """Create a new chat session"""
@@ -284,6 +313,17 @@ class ChatSessionService:
             session = await self.create_session(session_data)
         
         return session
+
+    async def add_chat_turn(self, session_id: str, chat_turn: ChatTurn) -> bool:
+        """Add a chat turn to a session"""
+        try:
+            # Store chat turn
+            chat_turns_collection = mongodb_config.get_collection(self.chat_turns_collection_name)
+            await chat_turns_collection.insert_one(chat_turn.dict())
+            return True
+        except Exception as e:
+            print(f"Error adding chat turn to session {session_id}: {e}")
+            return False
 
 
 # Global service instance

@@ -1,17 +1,19 @@
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+import uuid
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from utils.helper import extract_sources_from_toolmessage
 from core.app import get_app
-from config.settings import get_settings
 import os
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.documents import Document
 from datetime import datetime
+from fastapi import Request
+from utils.rate_limiter import login_rate_limiter
 
 # Enhanced imports for advanced RAG
 from scripts.data_cleaning.data_cleaner import DataCleaner
@@ -31,6 +33,18 @@ from models.chat_session import (
     ChatSessionCreate, ChatSessionResponse, ChatSessionUpdate, ChatMessage,
     chat_session_service
 )
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from models.user import User, UserCreate, UserLogin, Token, TokenRefreshRequest, UserInDB, get_current_user, get_user_by_email
+from utils.auth_service import (
+    hash_password, verify_password, create_access_token, decode_access_token,
+    create_refresh_token, decode_refresh_token, blacklist_token, is_password_complex
+)
+from config.mongodb import mongodb_config
+from utils.rate_limiter import cleanup_rate_limiter
+import asyncio
+import time
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 load_dotenv()
 
@@ -97,17 +111,222 @@ rag_app = None
 is_initialized = False
 advanced_retriever = None
 
+# =============================================================================
+# AUTH ENDPOINTS
+# =============================================================================
+@app_api.post("/auth/register", response_model=Token)
+async def register_user(user: UserCreate):
+    """Register a new user."""
+    try:
+        users = mongodb_config.get_collection("users")
+        
+        # Check if email already exists
+        existing = await users.find_one({"email": user.email})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+            
+        # Validate password complexity
+        is_complex, message = is_password_complex(user.password)
+        if not is_complex:
+            raise HTTPException(status_code=400, detail=message)
+            
+        # Hash password and prepare user data
+        hashed_password = hash_password(user.password)
+        now = datetime.utcnow()
+        
+        # Create user document
+        await users.insert_one({
+            "email": user.email, 
+            "hashed_pw": hashed_password, 
+            "name": user.username,
+            "created_at": now, 
+            "updated_at": now
+        })
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": user.email})
+        refresh_token = create_refresh_token({"sub": user.email})
+        
+        # Calculate expiry time for client info (seconds since epoch)
+        expires_at = int(time.time()) + 60 * 60  # 1 hour from now
+        
+        return Token(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_at=expires_at
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration error: {str(e)}")
+
+@app_api.post("/auth/login", response_model=Token)
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+    """Login user and return JWT tokens."""
+    # Check rate limiting
+    client_ip = request.client.host
+    if await login_rate_limiter.is_rate_limited(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts, please try again later"
+        )
+    
+    try:
+        users = mongodb_config.get_collection("users")
+        user = await users.find_one({"email": form_data.username})
+        
+        # Validate credentials
+        if not user or not verify_password(form_data.password, user["hashed_pw"]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        # Generate tokens
+        access_token = create_access_token({"sub": user["email"]})
+        refresh_token = create_refresh_token({"sub": user["email"]})
+        
+        # Calculate expiry time for client info
+        expires_at = int(time.time()) + 60 * 60  # 1 hour from now
+        
+        return Token(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_at=expires_at
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login error: {str(e)}"
+        )
+
+@app_api.post("/auth/refresh", response_model=Token)
+async def refresh_token(token_data: TokenRefreshRequest):
+    """Get a new access token using refresh token."""
+    try:
+        # Validate refresh token
+        payload = decode_refresh_token(token_data.refresh_token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+            
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+            
+        # Verify user exists
+        user = await get_user_by_email(mongodb_config, email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+            
+        # Generate new tokens
+        new_access_token = create_access_token({"sub": email})
+        new_refresh_token = create_refresh_token({"sub": email})
+        
+        # Calculate expiry time
+        expires_at = int(time.time()) + 60 * 60  # 1 hour from now
+        
+        return Token(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer",
+            expires_at=expires_at
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token refresh error: {str(e)}"
+        )
+
+@app_api.get("/auth/me", response_model=User)
+async def get_current_user_endpoint(current_user: User = Depends(get_current_user)):
+    """Get current authenticated user."""
+    return current_user
+
+@app_api.post("/auth/logout")
+async def logout(token: str = Depends(oauth2_scheme)):
+    """Logout user and invalidate token."""
+    try:
+        payload = decode_access_token(token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
+        
+        # Add token to blacklist
+        blacklist_token(token)
+        
+        return {"message": "Logged out successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Logout error: {str(e)}"
+        )
+
+@app_api.post("/auth/password-reset-request")
+async def request_password_reset(email: str):
+    """Request password reset link."""
+    # In a real application, you would:
+    # 1. Generate a reset token
+    # 2. Store token with expiry in database
+    # 3. Send email with reset link
+    
+    # For this demo, we'll just simulate the process
+    try:
+        user = await get_user_by_email(email)
+        if not user:
+            # Don't reveal if email exists or not for security
+            return {"message": "If the email exists, a reset link has been sent"}
+            
+        # In real application, send email here
+        return {"message": "If the email exists, a reset link has been sent"}
+    except Exception as e:
+        # Still return same message to avoid revealing if email exists
+        return {"message": "If the email exists, a reset link has been sent"}
+
 @app_api.on_event("startup")
 async def startup_event():
     """Initialize the enhanced RAG system and MongoDB on startup."""
     global rag_app, is_initialized, advanced_retriever
     
     try:
+        # Start background tasks
+        asyncio.create_task(cleanup_rate_limiter())
+        
         # Initialize MongoDB connection
         print("🔌 Connecting to MongoDB...")
         mongodb_connected = await mongodb_config.connect()
         if not mongodb_connected:
             print("⚠️ MongoDB connection failed, feedback features will be disabled")
+            
+        # Initialize chat session indexes
+        print("📝 Initializing chat session service...")
+        if await chat_session_service.initialize():
+            print("✅ Chat session service initialized")
+        else:
+            print("⚠️ Failed to initialize chat session service")
         
         TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
         # Check if we should skip auto-processing on startup
@@ -311,27 +530,200 @@ async def query_rag_enhanced(request: EnhancedQueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing enhanced query: {str(e)}")
 
+# =============================================================================
+# CHAT SESSION ENDPOINTS
+# =============================================================================
+
+@app_api.post("/sessions/new", response_model=ChatSessionResponse)
+async def create_new_session(
+    request: NewSessionRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new chat session tied to authenticated user."""
+    try:
+        session_data = ChatSessionCreate(
+            session_id=str(uuid.uuid4()),
+            user_id=current_user.email,  # Always use authenticated user
+            title=request.title or f"Chat {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        session = await chat_session_service.create_session(session_data)
+        return session
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating session: {str(e)}")
+
+@app_api.get("/sessions", response_model=List[ChatSessionResponse])
+async def list_sessions(
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
+    """List chat sessions for the authenticated user."""
+    try:
+        sessions = await chat_session_service.list_sessions(
+            user_id=current_user.email,
+            limit=limit
+        )
+        return sessions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+@app_api.get("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def get_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific chat session with security check."""
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        # Security: Verify ownership
+        if session.user_id != current_user.email:
+            raise HTTPException(status_code=403, detail="Not authorized to access this session")
+            
+        return session
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
+
+@app_api.get("/sessions/{session_id}/messages", response_model=List[ChatMessage])
+async def get_session_messages(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get all messages for a specific session with security check."""
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        # Security: Verify ownership
+        if session.user_id != current_user.email:
+            raise HTTPException(status_code=403, detail="Not authorized to access this session")
+            
+        messages = await chat_session_service.get_session_messages(session_id)
+        return messages
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session messages: {str(e)}")
+
+@app_api.put("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_session(
+    session_id: str,
+    update_data: ChatSessionUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update a chat session with security check."""
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        # Security: Verify ownership
+        if session.user_id != current_user.email:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this session")
+            
+        updated_session = await chat_session_service.update_session(session_id, update_data)
+        if not updated_session:
+            raise HTTPException(status_code=500, detail="Failed to update session")
+            
+        return updated_session
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating session: {str(e)}")
+
+@app_api.delete("/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a chat session with security check."""
+    try:
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        # Security: Verify ownership
+        if session.user_id != current_user.email:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this session")
+            
+        success = await chat_session_service.delete_session(session_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete session")
+            
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
+
+@app_api.get("/sessions/user/stats")
+async def get_user_sessions_stats(current_user: User = Depends(get_current_user)):
+    """Get statistics about user's sessions."""
+    try:
+        user_sessions = await chat_session_service.list_sessions(user_id=current_user.email)
+        total_messages = 0
+        
+        for session in user_sessions:
+            messages = await chat_session_service.get_session_messages(session.session_id)
+            total_messages += len(messages)
+            
+        return {
+            "total_sessions": len(user_sessions),
+            "total_messages": total_messages,
+            "oldest_session": min(user_sessions, key=lambda s: s.created_at).created_at if user_sessions else None,
+            "newest_session": max(user_sessions, key=lambda s: s.created_at).created_at if user_sessions else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving session stats: {str(e)}")
+
+async def get_or_create_default_session(user_email: str) -> str:
+    """Get user's default session or create one if none exists."""
+    try:
+        sessions = await chat_session_service.list_sessions(user_id=user_email, limit=1)
+        if sessions:
+            return sessions[0].session_id
+        
+        # Create default session
+        session_data = ChatSessionCreate(
+            session_id=str(uuid.uuid4()),
+            user_id=user_email,
+            title="Default Chat"
+        )
+        session = await chat_session_service.create_session(session_data)
+        return session.session_id
+    except Exception as e:
+        print(f"Error in get_or_create_default_session: {e}")
+        raise
+
+# Update the stream_query endpoint to use authentication
 @app_api.post("/stream_async")
-async def stream_query(request: QueryRequest):
-    """Stream the response to a query."""
+async def stream_query(
+    request: QueryRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Stream the response to a query with user authentication."""
     if not is_initialized:
         raise HTTPException(status_code=503, detail="RAG system not initialized")
     
-    # Generate session_id if not provided
+    # Get or create session
     session_id = request.session_id
     if not session_id:
-        import uuid
-        session_id = str(uuid.uuid4())
+        session_id = await get_or_create_default_session(current_user.email)
+    else:
+        # Verify session ownership
+        session = await chat_session_service.get_session(session_id)
+        if not session:
+            session_id = await get_or_create_default_session(current_user.email)
+        elif session.user_id != current_user.email:
+            raise HTTPException(status_code=403, detail="Not authorized to access this session")
     
     async def event_stream():
         # Send session_id first
         yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
-        
-        # Ensure session exists in MongoDB
-        try:
-            await chat_session_service.get_or_create_session(session_id)
-        except Exception as e:
-            print(f"Warning: Could not create/access session in MongoDB: {e}")
         
         # Store user message
         try:
@@ -347,10 +739,8 @@ async def stream_query(request: QueryRequest):
         # Collect the full AI response
         full_response = ""
         
-        # Stream the response with session support
+        # Stream the response
         for chunk in rag_app.stream_query(request.question, session_id):
-            # Only stream the final AI messages (not tool calls or intermediate messages)
-            
             if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
                 content = chunk[0].content
                 full_response += content
@@ -361,7 +751,7 @@ async def stream_query(request: QueryRequest):
                 for source in sources:
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
-        # Store AI response after streaming is complete
+        # Store AI response
         try:
             if full_response.strip():
                 ai_message = ChatMessage(
@@ -374,178 +764,6 @@ async def stream_query(request: QueryRequest):
             print(f"Warning: Could not store AI message: {e}")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-@app_api.post("/documents")
-async def add_documents(request: DocumentRequest):
-    """Add documents to the vector database with optional enhanced processing."""
-    if not is_initialized:
-        raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
-    try:
-        if request.use_enhanced_processing:
-            # Use enhanced document processing
-            print("🔄 Processing documents with enhanced cleaning and splitting...")
-            
-            # Create temporary JSON-like structure for DataCleaner
-            temp_data = {}
-            for i, (text, metadata) in enumerate(zip(request.texts, request.metadatas or [{}] * len(request.texts))):
-                temp_data[f"doc_{i}"] = {
-                    "text_content": text,
-                    "title": metadata.get("title", f"Document {i}"),
-                    "description": metadata.get("description", ""),
-                    **metadata
-                }
-            
-            # Clean and process with DataCleaner
-            cleaner = DataCleaner(
-                temp_data, 
-                use_advanced_processing=True,
-                chunk_size=800,
-                chunk_overlap=100
-            )
-            enhanced_docs = cleaner.clean_data()
-            
-            # Add to vector database
-            rag_app.vector_db.add_documents(enhanced_docs)
-            
-            return {
-                "message": f"Added {len(enhanced_docs)} enhanced document chunks from {len(request.texts)} original documents",
-                "processing_type": "enhanced",
-                "original_count": len(request.texts),
-                "final_count": len(enhanced_docs),
-                "expansion_ratio": len(enhanced_docs) / len(request.texts) if request.texts else 0
-            }
-        else:
-            # Use basic processing (backward compatibility)
-            rag_app.add_documents_from_text(request.texts, request.metadatas)
-            return {
-                "message": f"Added {len(request.texts)} documents successfully",
-                "processing_type": "basic"
-            }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error adding documents: {str(e)}")
-
-@app_api.post("/load-json-enhanced")
-async def load_json_data_enhanced(file_path: str, use_enhanced_processing: bool = True):
-    """Load documents from a JSON file with enhanced processing."""
-    if not is_initialized:
-        raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
-    try:
-        if use_enhanced_processing:
-            print(f"📚 Loading {file_path} with enhanced processing...")
-            
-            # Load raw JSON data
-            with open(file_path, 'r') as f:
-                raw_data = f.read()
-            
-            # Process with DataCleaner
-            cleaner = DataCleaner(
-                raw_data,
-                use_advanced_processing=True,
-                chunk_size=800,
-                chunk_overlap=100
-            )
-            enhanced_docs = cleaner.clean_data()
-            
-            # Add to vector database
-            rag_app.vector_db.add_documents(enhanced_docs)
-            
-            # Get processing statistics
-            stats = cleaner.doc_processor.get_processing_stats([], enhanced_docs) if cleaner.doc_processor else {}
-            
-            return {
-                "message": f"Loaded and enhanced {len(enhanced_docs)} document chunks from {file_path}",
-                "processing_type": "enhanced",
-                "document_count": len(enhanced_docs),
-                "processing_stats": stats
-            }
-        else:
-            # Fallback to basic loading
-            num_docs = rag_app.load_data_from_json(file_path)
-            return {
-                "message": f"Loaded {num_docs} documents from {file_path}",
-                "processing_type": "basic"
-            }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading JSON data: {str(e)}")
-
-@app_api.post("/load-json")
-async def load_json_data(file_path: str):
-    """Load documents from a JSON file with basic processing (backward compatibility)."""
-    if not is_initialized:
-        raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
-    try:
-        num_docs = rag_app.load_data_from_json(file_path)
-        return {"message": f"Loaded {num_docs} documents from {file_path}", "processing_type": "basic"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error loading JSON data: {str(e)}")
-
-@app_api.get("/search")
-async def search_documents(query: str, k: int = 4):
-    """Search for relevant documents without generating a response."""
-    if not is_initialized:
-        raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
-    try:
-        docs = rag_app.search_documents(query, k=k)
-        results = [
-            {
-                "content": doc.page_content,
-                "metadata": doc.metadata
-            }
-            for doc in docs
-        ]
-        
-        return {"query": query, "results": results}
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error searching documents: {str(e)}")
-
-@app_api.get("/stats")
-async def get_stats():
-    """Get system statistics."""
-    if not is_initialized:
-        raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
-    return rag_app.get_stats()
-
-@app_api.get("/retrieval-stats")
-async def get_retrieval_statistics():
-    """Get advanced retrieval statistics."""
-    if not is_initialized or not advanced_retriever:
-        raise HTTPException(status_code=503, detail="Enhanced RAG system not initialized")
-    
-    try:
-        stats_result = get_retrieval_stats.invoke({})
-        return stats_result.get('stats', {})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error getting retrieval stats: {str(e)}")
-
-@app_api.post("/configure-retriever")
-async def configure_advanced_retriever(
-    max_results: int = 5,
-    retrieval_strategy: str = "hybrid",
-    enable_reranking: bool = True,
-    similarity_threshold: float = 0.7
-):
-    """Configure the advanced retriever settings."""
-    if not is_initialized or not advanced_retriever:
-        raise HTTPException(status_code=503, detail="Enhanced RAG system not initialized")
-    
-    try:
-        result = configure_retriever.invoke({
-            "max_results": max_results,
-            "retrieval_strategy": retrieval_strategy,
-            "enable_reranking": enable_reranking,
-            "similarity_threshold": similarity_threshold
-        })
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error configuring retriever: {str(e)}")
 
 # =============================================================================
 # MONGODB DEBUG ENDPOINTS
@@ -739,87 +957,6 @@ async def get_feedback_stats(limit: int = 10):
 # =============================================================================
 # CHAT SESSION ENDPOINTS
 # =============================================================================
-
-@app_api.post("/sessions/new", response_model=ChatSessionResponse)
-async def create_new_session(request: NewSessionRequest):
-    """Create a new chat session."""
-    try:
-        import uuid
-        session_id = str(uuid.uuid4())
-        
-        session_data = ChatSessionCreate(
-            session_id=session_id,
-            user_id=request.user_id,
-            title=request.title or f"Chat Session {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-        )
-        
-        session = await chat_session_service.create_session(session_data)
-        return session
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creating new session: {str(e)}")
-
-@app_api.get("/sessions", response_model=List[ChatSessionResponse])
-async def list_sessions(user_id: Optional[str] = None, limit: int = 20):
-    """List chat sessions, optionally filtered by user."""
-    try:
-        sessions = await chat_session_service.list_sessions(user_id=user_id, limit=limit)
-        return sessions
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
-
-@app_api.get("/sessions/{session_id}", response_model=ChatSessionResponse)
-async def get_session(session_id: str):
-    """Get a specific chat session with all messages."""
-    try:
-        session = await chat_session_service.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving session: {str(e)}")
-
-@app_api.get("/sessions/{session_id}/messages", response_model=List[ChatMessage])
-async def get_session_messages(session_id: str):
-    """Get all messages for a specific session."""
-    try:
-        messages = await chat_session_service.get_session_messages(session_id)
-        return messages
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error retrieving session messages: {str(e)}")
-
-@app_api.put("/sessions/{session_id}", response_model=ChatSessionResponse)
-async def update_session(session_id: str, update_data: ChatSessionUpdate):
-    """Update a chat session (title, metadata)."""
-    try:
-        session = await chat_session_service.update_session(session_id, update_data)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error updating session: {str(e)}")
-
-@app_api.delete("/sessions/{session_id}")
-async def delete_session(session_id: str):
-    """Delete a chat session and all its messages."""
-    try:
-        success = await chat_session_service.delete_session(session_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Session not found")
-        return {"message": "Session deleted successfully"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
 
 # For running with uvicorn
 if __name__ == "__main__":
