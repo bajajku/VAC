@@ -113,7 +113,7 @@ const ChatPage = () => {
         if (convertedMessages.length === 0) {
           setMessages([{
             id: 1,
-            text: "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?",
+            text: INITIAL_GREETING,
             sender: 'bot',
             timestamp: new Date()
           }]);

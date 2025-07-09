@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
+from enum import Enum
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from config.mongodb import MongoDBConfig, mongodb_config
@@ -8,12 +9,29 @@ from utils.auth_service import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
+class AuthProvider(str, Enum):
+    LOCAL = "local"
+    GOOGLE = "google"
+
+class OAuthUserInfo(BaseModel):
+    """OAuth user information"""
+    provider: AuthProvider
+    provider_user_id: str
+    email: EmailStr
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    expires_at: Optional[int] = None
+
 class User(BaseModel):
     email: EmailStr = Field(..., description="User email")
     username: Optional[str] = Field(None, description="User username")
     hashed_password: Optional[str] = Field(None, description="Hashed password")
     created_at: Optional[datetime] = Field(None, description="User creation timestamp")
     updated_at: Optional[datetime] = Field(None, description="User last update timestamp")
+    auth_provider: AuthProvider = Field(default=AuthProvider.LOCAL, description="Authentication provider")
+    oauth_info: Optional[OAuthUserInfo] = None
     
     class Config:
         from_attributes = True
@@ -50,8 +68,12 @@ class TokenRefreshRequest(BaseModel):
     refresh_token: str = Field(..., description="Refresh token")
     
 class TokenPayload(BaseModel):
-    sub: Optional[str] = None  
+    sub: Optional[str] = None
 
+class OAuthState(BaseModel):
+    """State parameter for OAuth flow"""
+    redirect_url: str
+    provider: AuthProvider
 
 
 # Helper function to get user safely

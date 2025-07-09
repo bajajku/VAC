@@ -148,3 +148,9 @@ xxhash==3.5.0
 yarl==1.20.0
 zipp==3.22.0
 zstandard==0.23.0
+
+# OAuth2 Dependencies
+httpx>=0.24.0
+python-jose[cryptography]>=3.3.0
+google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0

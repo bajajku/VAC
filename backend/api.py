@@ -48,6 +48,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 load_dotenv()
 
+# Add these imports at the top
+from config.oauth import get_google_oauth_config
+from google.oauth2 import id_token
+from google.auth.transport import requests
+import httpx
+from models.user import AuthProvider, OAuthUserInfo, OAuthState
+import secrets
+import json
+from urllib.parse import urlencode
+
 # Pydantic models for API
 class QueryRequest(BaseModel):
     question: str
@@ -306,6 +316,204 @@ async def request_password_reset(email: str):
         # Still return same message to avoid revealing if email exists
         return {"message": "If the email exists, a reset link has been sent"}
 
+@app_api.get("/auth/google/login")
+async def google_login(redirect_url: str = "/"):
+    """Start Google OAuth flow"""
+    try:
+        # Generate state token to prevent CSRF
+        state_data = OAuthState(redirect_url=redirect_url, provider=AuthProvider.GOOGLE)
+        state = secrets.token_urlsafe(32)
+        
+        # Store state in MongoDB (you might want to use Redis in production)
+        states_collection = mongodb_config.get_collection("oauth_states")
+        await states_collection.insert_one({
+            "state": state,
+            "data": json.loads(state_data.json()),
+            "created_at": datetime.utcnow()
+        })
+        
+        # Get Google OAuth config
+        google_config = get_google_oauth_config()
+        
+        # Build authorization URL
+        params = {
+            "client_id": google_config.client_id,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "redirect_uri": google_config.redirect_uri,
+            "state": state,
+            "access_type": "offline",  # To get refresh token
+            "prompt": "consent"  # To always get refresh token
+        }
+        
+        auth_url = f"{google_config.authorize_url}?{urlencode(params)}"
+        return {"authorization_url": auth_url}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start Google login: {str(e)}")
+
+@app_api.get("/auth/google/callback")
+async def google_callback(code: str, state: str):
+    """Handle Google OAuth callback"""
+    try:
+        # Verify state token
+        states_collection = mongodb_config.get_collection("oauth_states")
+        stored_state = await states_collection.find_one({"state": state})
+        
+        if not stored_state:
+            raise HTTPException(status_code=400, detail="Invalid state parameter")
+            
+        # Clean up used state
+        await states_collection.delete_one({"state": state})
+        
+        # Get Google OAuth config
+        google_config = get_google_oauth_config()
+        
+        # Exchange code for tokens
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                google_config.token_url,
+                data={
+                    "client_id": google_config.client_id,
+                    "client_secret": google_config.client_secret,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": google_config.redirect_uri
+                }
+            )
+            
+            if token_response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to get token from Google")
+                
+            token_data = token_response.json()
+            
+            # Verify ID token
+            id_info = id_token.verify_oauth2_token(
+                token_data["id_token"],
+                requests.Request(),
+                google_config.client_id
+            )
+            
+            # Get user info
+            userinfo_response = await client.get(
+                google_config.userinfo_url,
+                headers={"Authorization": f"Bearer {token_data['access_token']}"}
+            )
+            
+            if userinfo_response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to get user info from Google")
+                
+            userinfo = userinfo_response.json()
+            
+            # Create OAuth user info
+            oauth_info = OAuthUserInfo(
+                provider=AuthProvider.GOOGLE,
+                provider_user_id=id_info["sub"],
+                email=userinfo["email"],
+                name=userinfo.get("name"),
+                picture=userinfo.get("picture"),
+                access_token=token_data["access_token"],
+                refresh_token=token_data.get("refresh_token"),
+                expires_at=int(time.time()) + token_data["expires_in"]
+            )
+            
+            # Get or create user
+            users = mongodb_config.get_collection("users")
+            user = await users.find_one({"email": oauth_info.email})
+            
+            if user:
+                # Update existing user
+                await users.update_one(
+                    {"_id": user["_id"]},
+                    {
+                        "$set": {
+                            "auth_provider": AuthProvider.GOOGLE,
+                            "oauth_info": json.loads(oauth_info.json()),
+                            "updated_at": datetime.utcnow()
+                        }
+                    }
+                )
+            else:
+                # Create new user
+                user = {
+                    "email": oauth_info.email,
+                    "username": oauth_info.name or oauth_info.email.split("@")[0],
+                    "auth_provider": AuthProvider.GOOGLE,
+                    "oauth_info": json.loads(oauth_info.json()),
+                    "created_at": datetime.utcnow(),
+                    "updated_at": datetime.utcnow()
+                }
+                await users.insert_one(user)
+            
+            # Create access token
+            access_token = create_access_token({"sub": oauth_info.email})
+            refresh_token = create_refresh_token({"sub": oauth_info.email})
+            
+            # Get redirect URL from state
+            redirect_url = stored_state["data"]["redirect_url"]
+            
+            # Add tokens to URL
+            if "?" in redirect_url:
+                redirect_url += "&"
+            else:
+                redirect_url += "?"
+            redirect_url += urlencode({
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer"
+            })
+            
+            return {"redirect_url": redirect_url}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process Google callback: {str(e)}")
+
+@app_api.post("/auth/google/refresh")
+async def refresh_google_token(user: User = Depends(get_current_user)):
+    """Refresh Google OAuth tokens"""
+    try:
+        if user.auth_provider != AuthProvider.GOOGLE or not user.oauth_info or not user.oauth_info.refresh_token:
+            raise HTTPException(status_code=400, detail="No Google refresh token available")
+            
+        google_config = get_google_oauth_config()
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                google_config.token_url,
+                data={
+                    "client_id": google_config.client_id,
+                    "client_secret": google_config.client_secret,
+                    "refresh_token": user.oauth_info.refresh_token,
+                    "grant_type": "refresh_token"
+                }
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to refresh Google token")
+                
+            token_data = response.json()
+            
+            # Update user's OAuth info
+            users = mongodb_config.get_collection("users")
+            oauth_info = user.oauth_info.copy()
+            oauth_info.access_token = token_data["access_token"]
+            oauth_info.expires_at = int(time.time()) + token_data["expires_in"]
+            
+            await users.update_one(
+                {"email": user.email},
+                {
+                    "$set": {
+                        "oauth_info": json.loads(oauth_info.json()),
+                        "updated_at": datetime.utcnow()
+                    }
+                }
+            )
+            
+            return {"access_token": token_data["access_token"]}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh Google token: {str(e)}")
+
 @app_api.on_event("startup")
 async def startup_event():
     """Initialize the enhanced RAG system and MongoDB on startup."""
@@ -327,6 +535,12 @@ async def startup_event():
             print("✅ Chat session service initialized")
         else:
             print("⚠️ Failed to initialize chat session service")
+            
+        # Create OAuth states index with TTL
+        print("🔑 Creating OAuth indexes...")
+        states_collection = mongodb_config.get_collection("oauth_states")
+        await states_collection.create_index("created_at", expireAfterSeconds=3600)  # Expire after 1 hour
+        print("✅ OAuth indexes created")
         
         TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
         # Check if we should skip auto-processing on startup
