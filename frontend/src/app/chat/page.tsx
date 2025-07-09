@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import dotenv from 'dotenv';
 import ReactMarkdown from 'react-markdown';
@@ -9,6 +9,10 @@ import FeedbackRating from '../../components/FeedbackRating';
 import { feedbackService } from '../../services/feedbackService';
 import SessionManager, { SessionManagerRef } from '../../components/SessionManager';
 import { sessionService } from '../../services/sessionService';
+import { logoutService } from '../../services/logoutService';
+import Cookies from 'js-cookie';
+import { useRouter } from 'next/navigation';
+import router from 'next/router';
 
 dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -43,6 +47,7 @@ type Message = {
 };
 
 const ChatPage = () => {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -66,6 +71,10 @@ const ChatPage = () => {
   };
 
   useEffect(() => {
+    if (!Cookies.get('token')) {
+      router.push('/auth/login');
+      return;
+    }
     scrollToBottom();
   }, [messages]);
 
@@ -167,7 +176,8 @@ const ChatPage = () => {
       const response = await fetch(`${BASE_URL}/stream_async`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Cookies.get('token')}`
         },
         body: JSON.stringify({ 
           question: inputText,
@@ -304,6 +314,22 @@ const ChatPage = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const result = await logoutService.logout();
+      if (result.success) {
+        // Clear local storage
+        localStorage.removeItem('chatSessionId');
+        // Redirect to login page
+        router.push('/auth/login');
+      } else {
+        console.error('Logout failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
@@ -340,6 +366,14 @@ const ChatPage = () => {
               onSessionChange={handleSessionChange}
               onNewSession={handleNewSession}
             />
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+              aria-label="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">Logout</span>
+            </button>
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <span className="text-sm text-slate-600 hidden sm:inline">Secure Connection</span>

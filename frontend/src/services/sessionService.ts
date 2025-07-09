@@ -1,4 +1,5 @@
 // Types for chat session management
+import Cookies from 'js-cookie';
 export type ChatMessage = {
   id: string;
   content: string;
@@ -46,13 +47,20 @@ class SessionService {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
 
+  private getAuthHeaders(): HeadersInit {
+    const token = Cookies.get('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  }
+
   async createNewSession(request: NewSessionRequest = {}): Promise<{ success: boolean; data?: ChatSession; error?: string }> {
     try {
+
       const response = await fetch(`${this.baseUrl}/sessions/new`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(request),
       });
 
@@ -75,7 +83,9 @@ class SessionService {
       if (userId) params.append('user_id', userId);
       if (limit) params.append('limit', limit.toString());
 
-      const response = await fetch(`${this.baseUrl}/sessions?${params}`);
+      const response = await fetch(`${this.baseUrl}/sessions?${params}`, {
+        headers: this.getAuthHeaders()
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -91,7 +101,9 @@ class SessionService {
 
   async getSession(sessionId: string): Promise<{ success: boolean; data?: ChatSession; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`);
+      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
+        headers: this.getAuthHeaders()
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -109,7 +121,9 @@ class SessionService {
 
   async getSessionMessages(sessionId: string): Promise<{ success: boolean; data?: ChatMessage[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}/messages`);
+      const response = await fetch(`${this.baseUrl}/sessions/${sessionId}/messages`, {
+        headers: this.getAuthHeaders()
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -127,9 +141,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(updateData),
       });
 
@@ -151,6 +163,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'DELETE',
+        headers: this.getAuthHeaders()
       });
 
       if (response.ok) {
