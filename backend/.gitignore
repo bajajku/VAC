@@ -5,6 +5,10 @@
 chroma_db/
 data/backend/chroma_db/chroma.sqlite3
 backend/chroma_db/*.sqlite3 # Ignore all SQLite files
+<<<<<<< HEAD
 *.log
 *.json
 *.txtpostman_collection.json
+=======
+postman_collection.json
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
