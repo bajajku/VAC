@@ -13,7 +13,6 @@ import { logoutService } from '../../services/logoutService';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 
-dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const INITIAL_GREETING = "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?";
 
