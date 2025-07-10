@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { validatePassword, getPasswordStrengthColor } from '@/utils/passwordValidation';
+import Cookies from 'js-cookie';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -76,7 +77,7 @@ const SignupPage = () => {
       }
 
       if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
+        Cookies.set('token', data.access_token);
         router.push('/chat');
       } else {
         throw new Error('No access token received');
