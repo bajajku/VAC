@@ -130,3 +130,6 @@ def get_chat_history(session_id: str, chats_by_session_id: dict, max_tokens: int
         chat_history.messages = chat_history.messages[-20:]
     
     return chat_history
+
+def store_chat_message(session_id: str, message: str, sender: str):
+    pass
