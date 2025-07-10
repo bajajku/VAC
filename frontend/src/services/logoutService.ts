@@ -1,11 +1,18 @@
 import Cookies from 'js-cookie';
+<<<<<<< HEAD
 import { refreshTokenIfNeeded } from '../utils/refreshToken';
+=======
+
+
+
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
 class LogoutService {
   private baseUrl: string;
 
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
+<<<<<<< HEAD
   
   private async getAuthHeaders(): Promise<HeadersInit> {
     // Try to refresh token if needed
@@ -21,6 +28,14 @@ class LogoutService {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true'
+=======
+
+  private getAuthHeaders(): HeadersInit {
+    const token = Cookies.get('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
     };
   }
 
@@ -28,6 +43,7 @@ class LogoutService {
     try {
       const response = await fetch(`${this.baseUrl}/auth/logout`, {
         method: 'POST',
+<<<<<<< HEAD
         headers: await this.getAuthHeaders(),
       });
 
@@ -35,6 +51,14 @@ class LogoutService {
         // Remove the token cookies
         Cookies.remove('token');
         Cookies.remove('refresh_token');
+=======
+        headers: this.getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        // Remove the token cookie
+        Cookies.remove('token');
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         return { success: true };
       } else {
         return { success: false, error: 'Failed to logout' };

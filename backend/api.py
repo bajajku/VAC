@@ -117,6 +117,10 @@ class NewSessionRequest(BaseModel):
     user_id: Optional[str] = None
     title: Optional[str] = None
 
+class NewSessionRequest(BaseModel):
+    user_id: Optional[str] = None
+    title: Optional[str] = None
+
 # Initialize FastAPI app
 app_api = FastAPI(
     title="RAG System API",
@@ -967,9 +971,14 @@ async def stream_query(
         except Exception as e:
             print(f"Warning: Could not store user message: {e}")
         
+<<<<<<< HEAD
         # Collect the full AI response and sources
         full_response = ""
         collected_sources = []
+=======
+        # Collect the full AI response
+        full_response = ""
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         
         # Stream the response
         for chunk in rag_app.stream_query(request.question, session_id):
@@ -985,14 +994,22 @@ async def stream_query(
                         collected_sources.append(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
+<<<<<<< HEAD
         # Store AI response with sources
+=======
+        # Store AI response
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         try:
             if full_response.strip():
                 ai_message = ChatMessage(
                     content=full_response,
                     sender="assistant",
+<<<<<<< HEAD
                     timestamp=datetime.utcnow(),
                     sources=collected_sources
+=======
+                    timestamp=datetime.utcnow()
+>>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
                 )
                 await chat_session_service.add_message(session_id, ai_message)
         except Exception as e:
