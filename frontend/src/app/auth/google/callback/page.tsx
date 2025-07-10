@@ -15,13 +15,11 @@ const GoogleCallback = () => {
       try {
         // Check if we have access_token in the URL (second phase)
         const accessToken = searchParams.get('access_token');
-        const refreshToken = searchParams.get('refresh_token');
         
-        if (accessToken && refreshToken) {
-          console.log('Found tokens in URL, completing login');
-          // We're in the second phase, store the tokens and redirect
+        if (accessToken) {
+          console.log('Found access token in URL, completing login');
+          // We're in the second phase, store the token and redirect
           Cookies.set('token', accessToken, { expires: 7, sameSite: 'Lax' });
-          Cookies.set('refresh_token', refreshToken, { expires: 7, sameSite: 'Lax' });
           router.push('/chat');
           return;
         }
@@ -40,11 +38,7 @@ const GoogleCallback = () => {
         const callbackUrl = `${BASE_URL}/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
         console.log('Calling backend:', callbackUrl);
 
-        const response = await fetch(callbackUrl, {
-          headers: {
-            'ngrok-skip-browser-warning': 'true'
-          }
-        });
+        const response = await fetch(callbackUrl);
         console.log('Backend response status:', response.status);
 
         const data = await response.json();

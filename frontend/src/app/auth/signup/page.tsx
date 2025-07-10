@@ -62,7 +62,6 @@ const SignupPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
           email: formData.email,
@@ -79,7 +78,6 @@ const SignupPage = () => {
 
       if (data.access_token) {
         Cookies.set('token', data.access_token);
-        Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
         router.push('/chat');
       } else {
         throw new Error('No access token received');
@@ -102,11 +100,7 @@ const SignupPage = () => {
       setIsLoading(true);
       setError('');
       
-      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`, {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      });
+      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`);
       const data = await response.json();
       
       if (data.authorization_url) {

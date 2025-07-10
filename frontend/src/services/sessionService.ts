@@ -1,4 +1,3 @@
-import { refreshTokenIfNeeded } from '../utils/refreshToken';
 // Types for chat session management
 import Cookies from 'js-cookie';
 export type ChatMessage = {
@@ -6,7 +5,6 @@ export type ChatMessage = {
   content: string;
   sender: 'user' | 'assistant';
   timestamp: string;
-  sources?: string[];
   metadata?: Record<string, unknown>;
 };
 
@@ -40,7 +38,6 @@ export type FrontendMessage = {
   timestamp: Date;
   feedbackSubmitted?: boolean;
   sources?: string[];
-  tts?: boolean;
 };
 
 class SessionService {
@@ -49,20 +46,12 @@ class SessionService {
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
-  private async getAuthHeaders(): Promise<HeadersInit> {
-    // Try to refresh token if needed
-    const isValid = await refreshTokenIfNeeded();
-    if (!isValid) {
-      // Token refresh failed, redirect to login
-      window.location.href = '/auth/login';
-      throw new Error('Authentication failed');
-    }
 
+  private getAuthHeaders(): HeadersInit {
     const token = Cookies.get('token');
     return {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true'
+      'Content-Type': 'application/json'
     };
   }
 
@@ -71,7 +60,7 @@ class SessionService {
 
       const response = await fetch(`${this.baseUrl}/sessions/new`, {
         method: 'POST',
-        headers: await this.getAuthHeaders(),
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(request),
       });
 
@@ -95,7 +84,7 @@ class SessionService {
       if (limit) params.append('limit', limit.toString());
 
       const response = await fetch(`${this.baseUrl}/sessions?${params}`, {
-        headers: await this.getAuthHeaders()
+        headers: this.getAuthHeaders()
       });
 
       if (response.ok) {
@@ -113,7 +102,7 @@ class SessionService {
   async getSession(sessionId: string): Promise<{ success: boolean; data?: ChatSession; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
-        headers: await this.getAuthHeaders()
+        headers: this.getAuthHeaders()
       });
 
       if (response.ok) {
@@ -133,7 +122,7 @@ class SessionService {
   async getSessionMessages(sessionId: string): Promise<{ success: boolean; data?: ChatMessage[]; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}/messages`, {
-        headers: await this.getAuthHeaders()
+        headers: this.getAuthHeaders()
       });
 
       if (response.ok) {
@@ -152,7 +141,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'PUT',
-        headers: await this.getAuthHeaders(),
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(updateData),
       });
 
@@ -174,7 +163,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'DELETE',
-        headers: await this.getAuthHeaders()
+        headers: this.getAuthHeaders()
       });
 
       if (response.ok) {
@@ -211,10 +200,9 @@ class SessionService {
       sender: backendMessage.sender === 'assistant' ? 'bot' : backendMessage.sender,
       timestamp: new Date(backendMessage.timestamp),
       feedbackSubmitted: false,
-      sources: backendMessage.sources || [],
-      tts: backendMessage.sender === 'assistant' ? true : false
+      sources: []
     };
-  } 
+  }
 
   // Convert frontend message format to backend format
   convertFrontendMessage(frontendMessage: FrontendMessage): ChatMessage {
