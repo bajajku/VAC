@@ -32,7 +32,7 @@ class LogoutService {
         return { success: false, error: 'Failed to logout' };
       }
     } catch (error) {
-      return { success: false, error: 'Failed to logout' };
+      return { success: false, error: 'Failed to logout ' + error };
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,7 +8,8 @@ import Cookies from 'js-cookie';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const LoginPage = () => {
+// Create a separate component for the login form that uses searchParams
+const LoginForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/chat';
@@ -17,7 +18,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  useEffect(() => {
+  useEffect(() => { 
     // Check for error parameter in URL
     const errorParam = searchParams.get('error');
     if (errorParam === 'google_auth_failed') {
@@ -48,9 +49,14 @@ const LoginPage = () => {
       Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
       router.push(redirectPath);
 
-    } catch (err: any) {
-      setError(err.message || 'Failed to login. Please check your credentials.');
-      console.error('Login error:', err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to login. Please check your credentials.');
+        console.error('Login error:', err);
+      } else {
+        setError('Failed to login. Please check your credentials.');
+        console.error('Login error:', err);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +94,7 @@ const LoginPage = () => {
             Welcome Back
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
               Sign up
             </Link>
@@ -205,6 +211,19 @@ const LoginPage = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+// Main page component with Suspense boundary
+const LoginPage = () => {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 };
 

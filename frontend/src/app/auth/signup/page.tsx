@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -81,9 +81,14 @@ const SignupPage = () => {
       } else {
         throw new Error('No access token received');
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to register. Please try again.');
-      console.error('Registration error:', err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to register. Please try again.');
+        console.error('Registration error:', err);
+      } else {
+        setError('Failed to register. Please try again.');
+        console.error('Registration error:', err);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -102,9 +107,14 @@ const SignupPage = () => {
       } else {
         throw new Error('Failed to get authorization URL');
       }
-    } catch (err) {
-      setError('Failed to initiate Google signup. Please try again.');
-      console.error('Google signup error:', err);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'Failed to initiate Google signup. Please try again.');
+        console.error('Google signup error:', err);
+      } else {
+        setError('Failed to initiate Google signup. Please try again.');
+        console.error('Google signup error:', err);
+      }
     } finally {
       setIsLoading(false);
     }

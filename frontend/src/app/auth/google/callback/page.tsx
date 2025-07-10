@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export default function GoogleCallback() {
+const GoogleCallback = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -74,3 +74,12 @@ export default function GoogleCallback() {
     </div>
   );
 } 
+
+const GoogleCallbackPage = () => {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GoogleCallback />
+    </Suspense>
+  );
+};
+export default GoogleCallbackPage;

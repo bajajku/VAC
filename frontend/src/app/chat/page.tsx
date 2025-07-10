@@ -12,7 +12,6 @@ import { sessionService } from '../../services/sessionService';
 import { logoutService } from '../../services/logoutService';
 import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
-import router from 'next/router';
 
 dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -76,7 +75,7 @@ const ChatPage = () => {
       return;
     }
     scrollToBottom();
-  }, [messages]);
+  }, [router, messages]);
 
   useEffect(() => {
     const savedSessionId = localStorage.getItem('chatSessionId');
