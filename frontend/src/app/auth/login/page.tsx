@@ -214,7 +214,7 @@ const LoginForm = () => {
   );
 };
 
-// Main page component with Suspense boundary
+// Main page component with Suspense boundary to fix hydration issues
 const LoginPage = () => {
   return (
     <Suspense fallback={
