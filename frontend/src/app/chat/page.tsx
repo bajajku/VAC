@@ -1,15 +1,20 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import dotenv from 'dotenv';
+// Removed unnecessary dotenv import
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import FeedbackRating from '../../components/FeedbackRating';
 import { feedbackService } from '../../services/feedbackService';
+import SessionManager, { SessionManagerRef } from '../../components/SessionManager';
+import { sessionService } from '../../services/sessionService';
+import { logoutService } from '../../services/logoutService';
+import Cookies from 'js-cookie';
+import { useRouter } from 'next/navigation';
 
-dotenv.config();
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const INITIAL_GREETING = "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?";
 
 type QuestionAnswer = {
   question: string;
@@ -40,6 +45,7 @@ type Message = {
 };
 
 const ChatPage = () => {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -54,22 +60,100 @@ const ChatPage = () => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sessionManagerRef = useRef<SessionManagerRef>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
+    if (!Cookies.get('token')) {
+      router.push('/auth/login');
+      return;
+    }
     scrollToBottom();
-  }, [messages]);
+  }, [router, messages]);
 
   useEffect(() => {
     const savedSessionId = localStorage.getItem('chatSessionId');
     if (savedSessionId) {
       setSessionId(savedSessionId);
+      loadSessionHistory(savedSessionId);
+    } else {
+      // If no saved session, create a new one
+      createInitialSession();
     }
   }, []);
+
+  const createInitialSession = async () => {
+    try {
+      const result = await sessionService.createNewSession();
+      if (result.success && result.data) {
+        setSessionId(result.data.session_id);
+        sessionService.saveSessionToLocalStorage(result.data.session_id);
+        // Keep the initial bot message
+        setMessages([{
+          id: 1,
+          text: INITIAL_GREETING,
+          sender: 'bot',
+          timestamp: new Date()
+        }]);
+      }
+    } catch (error) {
+      console.error('Error creating initial session:', error);
+    }
+  };
+
+  const loadSessionHistory = async (sessionId: string) => {
+    setIsLoadingSession(true);
+    try {
+      const result = await sessionService.getSessionMessages(sessionId);
+      if (result.success && result.data) {
+        // Convert backend messages to frontend format
+        const convertedMessages = result.data.map((msg, index) => 
+          sessionService.convertBackendMessage(msg, index + 1)
+        );
+        
+        // Add initial bot message if no messages exist
+        if (convertedMessages.length === 0) {
+          setMessages([{
+            id: 1,
+            text: INITIAL_GREETING,
+            sender: 'bot',
+            timestamp: new Date()
+          }]);
+        } else {
+          setMessages(convertedMessages);
+        }
+      } else {
+        console.error('Failed to load session history:', result.error);
+      }
+    } catch (error) {
+      console.error('Error loading session history:', error);
+    } finally {
+      setIsLoadingSession(false);
+    }
+  };
+
+  const handleSessionChange = (newSessionId: string) => {
+    setSessionId(newSessionId);
+    loadSessionHistory(newSessionId);
+  };
+
+  const handleNewSession = () => {
+    // Reset messages to initial state
+    setMessages([{
+      id: 1,
+      text: "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?",
+      sender: 'bot',
+      timestamp: new Date()
+    }]);
+    setInputText('');
+    setLastQuestion('');
+    setLastAnswer('');
+  };
 
   const handleSendMessage = async (e?: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
@@ -90,7 +174,8 @@ const ChatPage = () => {
       const response = await fetch(`${BASE_URL}/stream_async`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Cookies.get('token')}`
         },
         body: JSON.stringify({ 
           question: inputText,
@@ -190,6 +275,11 @@ const ChatPage = () => {
       
       setLastQuestion(inputText);
       setLastAnswer(fullText);
+      
+      // Trigger session list refresh to update message counts
+      if (sessionManagerRef.current) {
+        sessionManagerRef.current.refreshSessions();
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => [...prev, {
@@ -222,6 +312,22 @@ const ChatPage = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const result = await logoutService.logout();
+      if (result.success) {
+        // Clear local storage
+        localStorage.removeItem('chatSessionId');
+        // Redirect to login page
+        router.push('/auth/login');
+      } else {
+        console.error('Logout failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
+  };
+
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
@@ -251,9 +357,25 @@ const ChatPage = () => {
               <p className="text-sm text-slate-600">Secure • Private • Supportive</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-sm text-slate-600 hidden sm:inline">Secure Connection</span>
+          <div className="flex items-center space-x-4">
+            <SessionManager
+              ref={sessionManagerRef}
+              currentSessionId={sessionId}
+              onSessionChange={handleSessionChange}
+              onNewSession={handleNewSession}
+            />
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+              aria-label="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">Logout</span>
+            </button>
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-sm text-slate-600 hidden sm:inline">Secure Connection</span>
+            </div>
           </div>
         </div>
       </header>
@@ -261,7 +383,16 @@ const ChatPage = () => {
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
         <div className="max-w-4xl mx-auto">
-          {messages.map((message) => (
+          {/* Loading Session Indicator */}
+          {isLoadingSession && (
+            <div className="flex items-center justify-center py-8">
+              <div className="flex items-center space-x-3">
+                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                <span className="text-slate-600">Loading conversation...</span>
+              </div>
+            </div>
+          )}
+          {!isLoadingSession && messages.map((message) => (
             <div
               key={message.id}
               className={`flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-300 ${
@@ -419,7 +550,7 @@ const ChatPage = () => {
           ))}
 
           {/* Typing Indicator */}
-          {isTyping && (
+          {!isLoadingSession && isTyping && (
             <div className="flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-300">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
                 <Shield className="w-5 h-5 text-white" />

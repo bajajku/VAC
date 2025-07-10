@@ -1,7 +1,6 @@
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConnectionFailure
-import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
