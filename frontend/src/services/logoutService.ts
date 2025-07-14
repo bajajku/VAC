@@ -61,7 +61,7 @@ class LogoutService {
       });
 
       if (response.ok) {
-        // Remove the token cookie
+        // Remove the token cookies
         Cookies.remove('token');
 >>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         return { success: true };

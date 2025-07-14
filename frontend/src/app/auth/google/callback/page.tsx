@@ -25,9 +25,9 @@ const GoogleCallback = () => {
           Cookies.set('refresh_token', refreshToken, { expires: 7, sameSite: 'Lax' });
 =======
         
-        if (accessToken) {
-          console.log('Found access token in URL, completing login');
-          // We're in the second phase, store the token and redirect
+        if (accessToken && refreshToken) {
+          console.log('Found tokens in URL, completing login');
+          // We're in the second phase, store the tokens and redirect
           Cookies.set('token', accessToken, { expires: 7, sameSite: 'Lax' });
 >>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
           router.push('/chat');
