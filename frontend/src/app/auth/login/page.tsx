@@ -50,6 +50,7 @@ const LoginForm = () => {
       }
 
       Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
+      Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
       router.push(redirectPath);
 
     } catch (err: unknown) {
