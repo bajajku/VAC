@@ -62,6 +62,7 @@ const SignupPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
           email: formData.email,
@@ -100,7 +101,11 @@ const SignupPage = () => {
       setIsLoading(true);
       setError('');
       
-      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`);
+      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       const data = await response.json();
       
       if (data.authorization_url) {

@@ -13,7 +13,8 @@ class LogoutService {
     const token = Cookies.get('token');
     return {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true'
     };
   }
 
