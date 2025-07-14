@@ -64,14 +64,19 @@ class FeedbackService {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
 
+  private getHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true'
+    };
+  }
+
   // New MongoDB-based feedback methods
   async createFeedback(feedback: FeedbackCreate): Promise<{ success: boolean; data?: FeedbackResponse; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/feedback`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(feedback),
       });
 
@@ -90,7 +95,9 @@ class FeedbackService {
 
   async getFeedbackById(feedbackId: string): Promise<{ success: boolean; data?: FeedbackResponse; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/feedback/${feedbackId}`);
+      const response = await fetch(`${this.baseUrl}/feedback/${feedbackId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -108,7 +115,9 @@ class FeedbackService {
 
   async getSessionFeedback(sessionId: string): Promise<{ success: boolean; data?: FeedbackResponse[]; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/feedback/session/${sessionId}`);
+      const response = await fetch(`${this.baseUrl}/feedback/session/${sessionId}`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -124,7 +133,9 @@ class FeedbackService {
 
   async getFeedbackStats(): Promise<{ success: boolean; data?: FeedbackStats; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/feedback-stats`);
+      const response = await fetch(`${this.baseUrl}/feedback-stats`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      });
 
       if (response.ok) {
         const data = await response.json();

@@ -38,7 +38,11 @@ const GoogleCallback = () => {
         const callbackUrl = `${BASE_URL}/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
         console.log('Calling backend:', callbackUrl);
 
-        const response = await fetch(callbackUrl);
+        const response = await fetch(callbackUrl, {
+          headers: {
+            'ngrok-skip-browser-warning': 'true'
+          }
+        });
         console.log('Backend response status:', response.status);
 
         const data = await response.json();
