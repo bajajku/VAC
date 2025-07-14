@@ -7,6 +7,7 @@ import secrets
 import warnings
 from typing import Optional, Dict, Tuple
 
+
 # Improved SECRET_KEY handling with fallback
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
