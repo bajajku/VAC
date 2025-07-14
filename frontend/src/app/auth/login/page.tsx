@@ -34,6 +34,9 @@ const LoginForm = () => {
       
       const response = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: new URLSearchParams({
             'username': email,
             'password': password,
@@ -70,7 +73,11 @@ const LoginForm = () => {
       // Get the current origin for the redirect URL
       const redirectUri = `${window.location.origin}/auth/google/callback`;
       
-      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=${encodeURIComponent(redirectUri)}`);
+      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=${encodeURIComponent(redirectUri)}`, {
+        headers: {
+          'ngrok-skip-browser-warning': 'true'
+        }
+      });
       const data = await response.json();
       
       if (data.authorization_url) {
