@@ -171,6 +171,46 @@ const ChatPage = () => {
     setIsTyping(true);
 
     try {
+      // Try to refresh token if needed
+      const token = Cookies.get('token');
+      if (!token) {
+        router.push('/auth/login');
+        return;
+      }
+
+      // Try to decode the token to check expiration
+      const tokenParts = token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        const expiresAt = payload.exp * 1000; // Convert to milliseconds
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        // If token expires in less than 5 minutes, refresh it
+        if (expiresAt - now < fiveMinutes) {
+          const refreshToken = Cookies.get('refresh_token');
+          if (refreshToken) {
+            const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+              },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            });
+
+            if (refreshResponse.ok) {
+              const data = await refreshResponse.json();
+              Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
+              Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
+            } else {
+              router.push('/auth/login');
+              return;
+            }
+          }
+        }
+      }
+
       const response = await fetch(`${BASE_URL}/stream_async`, {
         method: 'POST',
         headers: {
