@@ -63,9 +63,13 @@ const SignupPage = () => {
         headers: {
           'Content-Type': 'application/json',
 <<<<<<< HEAD
+<<<<<<< HEAD
           'ngrok-skip-browser-warning': 'true'
 =======
 >>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
+=======
+          'ngrok-skip-browser-warning': 'true'
+>>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
         },
         body: JSON.stringify({
           email: formData.email,
@@ -109,14 +113,20 @@ const SignupPage = () => {
       setError('');
       
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
       const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
       });
+<<<<<<< HEAD
 =======
       const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=/chat`);
 >>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
+=======
+>>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
       const data = await response.json();
       
       if (data.authorization_url) {
