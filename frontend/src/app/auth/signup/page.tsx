@@ -79,6 +79,7 @@ const SignupPage = () => {
 
       if (data.access_token) {
         Cookies.set('token', data.access_token);
+        Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
         router.push('/chat');
       } else {
         throw new Error('No access token received');
