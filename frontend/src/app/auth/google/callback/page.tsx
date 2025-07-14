@@ -15,11 +15,13 @@ const GoogleCallback = () => {
       try {
         // Check if we have access_token in the URL (second phase)
         const accessToken = searchParams.get('access_token');
+        const refreshToken = searchParams.get('refresh_token');
         
-        if (accessToken) {
-          console.log('Found access token in URL, completing login');
-          // We're in the second phase, store the token and redirect
+        if (accessToken && refreshToken) {
+          console.log('Found tokens in URL, completing login');
+          // We're in the second phase, store the tokens and redirect
           Cookies.set('token', accessToken, { expires: 7, sameSite: 'Lax' });
+          Cookies.set('refresh_token', refreshToken, { expires: 7, sameSite: 'Lax' });
           router.push('/chat');
           return;
         }
