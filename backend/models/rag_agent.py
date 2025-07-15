@@ -1,14 +1,13 @@
-from typing import Literal
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
-from langchain_core.tools import tool
+from typing import Literal, Optional
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from models.guardrails import Guardrails
 from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
 from langchain_core.runnables import RunnableConfig
-from utils.helper import get_chat_history
 class RAGAgent:
     """
     A RAG (Retrieval-Augmented Generation) agent using langgraph.
@@ -19,6 +18,8 @@ class RAGAgent:
         self.llm = llm.create_chat()
         self.tools = [retrieve_information]
         self.llm_with_tools = self.llm.bind_tools(self.tools)
+        self.input_guardrails: Optional[Guardrails] = kwargs.get("input_guardrails", None)
+        self.output_guardrails: Optional[Guardrails] = kwargs.get("output_guardrails", None)
         self.graph = self._build_graph()
         self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
     
@@ -29,11 +30,22 @@ class RAGAgent:
         workflow = StateGraph(State)
         
         # Add nodes
+        if self.input_guardrails:
+            workflow.add_node("input_guardrails", self._input_guardrails)
+        if self.output_guardrails:
+            workflow.add_node("output_guardrails", self._output_guardrails)
+        
         workflow.add_node("agent", self._call_model)
         workflow.add_node("tools", ToolNode(self.tools))
         
         # Add edges
-        workflow.add_edge(START, "agent")
+        workflow.add_edge(START, "input_guardrails")
+        workflow.add_conditional_edges("input_guardrails", self._validate_input, {
+            "validated": "agent",
+            "invalidated": END,
+        })
+        
+        # workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
             "agent",
             self._should_continue,
@@ -48,6 +60,26 @@ class RAGAgent:
         GraphImage.create_graph_image(graph)
         return graph
     
+    def _input_guardrails(self, state: State, config: RunnableConfig):
+        """Input guardrails."""
+        if self.input_guardrails:
+            try:
+                self.input_guardrails.validate(state["messages"][-1].content, strategy="solo", raise_on_fail=True)
+            except Exception as e:
+                print(f"Input guardrails failed: {e}")
+                return {"messages": [SystemMessage(content="I'm sorry, I can't answer that question.")]}
+        return state
+        
+    def _validate_input(self, state: State) -> Literal["validated", "invalidated"]:
+        messages = state["messages"]
+        last_message = messages[-1]
+        if isinstance(last_message, SystemMessage):
+            return "invalidated"
+        return "validated"
+        
+    def _output_guardrails(self, state: State, config: RunnableConfig):
+        """Output guardrails."""
+        return state
     # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
@@ -158,7 +190,7 @@ You are here to support — not to replace professional therapy.
         # Limit history size (keep last 8 messages = 4 exchanges)
         if len(chat_history.messages) > 8:
             chat_history.messages = chat_history.messages[-8:]
-    
+
     def _should_continue(self, state: State) -> Literal["continue", "end"]:
         """Determine whether to continue to tools or end the conversation."""
         messages = state["messages"]
@@ -170,7 +202,7 @@ You are here to support — not to replace professional therapy.
         # Otherwise, end
         return "end"
     
-    def invoke(self, user_input: str) -> str:
+    def invoke(self, user_input: str, config: RunnableConfig) -> str:
         """
         Process a user query through the RAG pipeline.
         
@@ -186,7 +218,7 @@ You are here to support — not to replace professional therapy.
         }
         
         # Run the graph
-        result = self.graph.invoke(initial_state)
+        result = self.graph.invoke(initial_state, config=config)
         
         # Extract the final AI message
         # final_message = result["messages"][-1]
@@ -196,13 +228,13 @@ You are here to support — not to replace professional therapy.
         #     return "I apologize, but I couldn't generate a proper response."
         return result
     
-    async def ainvoke(self, user_input: str) -> str:
+    async def ainvoke(self, user_input: str, config: RunnableConfig) -> str:
         """Async version of invoke."""
         initial_state = {
             "messages": [HumanMessage(content=user_input)]
         }
         
-        result = await self.graph.ainvoke(initial_state)
+        result = await self.graph.ainvoke(initial_state, config=config)
         
         final_message = result["messages"][-1]
         if isinstance(final_message, AIMessage):
@@ -226,7 +258,6 @@ You are here to support — not to replace professional therapy.
 
             if isinstance(chunk, AIMessage):
                 if chunk.content:
-                    print(chunk.content)
                     yield chunk.content
 
     async def astream(self, user_input: str):

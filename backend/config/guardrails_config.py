@@ -38,7 +38,7 @@ GUARDRAIL_CONFIG = {
     "profanity_hate_harassment": [
         (ProfanityFree, {}),
         (ToxicLanguage, {}),
-        (LlamaGuard7B, {"policies": ["O3", "O4"]}), # Hate & Harassment policies
+        # (LlamaGuard7B, {"policies": ["O3", "O4"]}), # Hate & Harassment policies
     ],
     # 6. Sensitive Military Context
     "sensitive_military": [
