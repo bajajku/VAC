@@ -8,6 +8,7 @@ from scripts.data_collection.json_parser import JsonParser
 from models.rag_chain import RAGChain
 from models.llm import LLM
 from langchain.schema import HumanMessage
+from models.guardrails import Guardrails
 
 class BaseRAGApplication(ABC):
     def __init__(self):
@@ -15,6 +16,8 @@ class BaseRAGApplication(ABC):
         self.vector_db: Optional[VectorDatabase] = None
         self.rag_application = None
         self.is_initialized = False
+        self.input_guardrails: Optional[Guardrails] = None
+        self.output_guardrails: Optional[Guardrails] = None
     
     @abstractmethod
     def initialize(self, **kwargs):
@@ -38,6 +41,8 @@ class RAGApplication:
         self.vector_db: Optional[VectorDatabase] = None
         self.rag_application = None
         self.is_initialized = False
+        self.input_guardrails: Optional[Guardrails] = None
+        self.output_guardrails: Optional[Guardrails] = None
     
     def initialize(
         self,
@@ -77,8 +82,8 @@ class RAGApplication:
         global_retriever.initialize(self.vector_db)
         
         # Separate LLM kwargs from RAG application kwargs
-        llm_kwargs = {k: v for k, v in kwargs.items() if k not in ['prompt', 'chats_by_session_id']}
-        rag_kwargs = {k: v for k, v in kwargs.items() if k in ['prompt', 'chats_by_session_id']}
+        llm_kwargs = {k: v for k, v in kwargs.items() if k not in ['prompt', 'chats_by_session_id', 'input_guardrails', 'output_guardrails']}
+        rag_kwargs = {k: v for k, v in kwargs.items() if k in ['prompt', 'chats_by_session_id', 'input_guardrails', 'output_guardrails']}
         
         # Initialize LLM
         print(f"🤖 Setting up LLM with {llm_provider}/{llm_model}...")
@@ -125,7 +130,7 @@ class RAGApplication:
         
         from langchain_core.documents import Document
         
-        if metadatas is None:
+        if metadatas is None or len(metadatas) == 0:
             metadatas = [{}] * len(texts)
         
         documents = [
@@ -136,27 +141,29 @@ class RAGApplication:
         self.vector_db.add_documents(documents)
         print(f"✅ Added {len(documents)} documents to vector database")
     
-    def query(self, question: str) -> str:
+    def query(self, question: str, session_id: str = None) -> str:
         """
         Query the RAG system with a question.
         
         Args:
             question: User's question
-            
+            session_id: Session ID
         Returns:
             str: Agent's response
         """
+        config = {"configurable": {"session_id": session_id}}
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return self.rag_application.invoke(question)
+        return self.rag_application.invoke(question, config=config)
     
-    async def aquery(self, question: str) -> str:
+    async def aquery(self, question: str, session_id: str = None) -> str:
         """Async version of query."""
+        config = {"configurable": {"session_id": session_id}}
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
-        return await self.rag_application.ainvoke(question)
+        return await self.rag_application.ainvoke(question, config=config)
     
     def stream_query(self, question: str, session_id: str = None):
         """Stream the response to a query with session support."""
