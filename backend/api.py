@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from models.guardrails import Guardrails
 from utils.helper import extract_sources_from_toolmessage
 from core.app import get_app
 import os
@@ -559,7 +560,8 @@ async def startup_event():
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,
-            "chats_by_session_id": {}
+            "chats_by_session_id": {},
+            "input_guardrails": Guardrails().with_policy("basic"),
         }
         rag_app.initialize(**config)
 
@@ -678,7 +680,7 @@ async def query_rag(request: QueryRequest):
     
     try:
         # Get the answer
-        answer = await rag_app.aquery(request.question)
+        answer = await rag_app.aquery(request.question, session_id=request.session_id)
         
         # Get source documents using basic search
         docs = rag_app.search_documents(request.question, k=request.k)
