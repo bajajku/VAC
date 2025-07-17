@@ -2,7 +2,7 @@ from typing import Literal, Optional
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
-from models.guardrails import Guardrails
+from models.guardrails import Guardrails, ValidationException
 from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
@@ -65,8 +65,10 @@ class RAGAgent:
         if self.input_guardrails:
             try:
                 self.input_guardrails.validate(state["messages"][-1].content, strategy="solo", raise_on_fail=True)
-            except Exception as e:
-                print(f"Input guardrails failed: {e}")
+            except ValidationException as e:
+                for name, result in e.results['solo_guards'].items():
+                    if not result.passed:
+                        print(f"{name} failed: {result.message}")
                 return {"messages": [SystemMessage(content="I'm sorry, I can't answer that question.")]}
         return state
         

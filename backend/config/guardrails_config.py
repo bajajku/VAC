@@ -1,78 +1,98 @@
 from guardrails.hub import (
-    ToxicLanguage, ShieldGemma2B, LlamaGuard7B,
-    DetectJailbreak, UnusualPrompt, ProfanityFree, SensitiveTopic
+    ToxicLanguage, DetectJailbreak, ProfanityFree, DetectPII, SensitiveTopic, LlamaGuard7B
 )
 
-# This configuration maps the categories you provided to the available Guardrails Hub validators.
-# Some validators you mentioned (like DetectPII, OutOfDomain) are not in the available list,
-# so I'm using suitable alternatives like LlamaGuard7B and ShieldGemma2B.
+# OPTIMIZED NON-LLM GUARDRAILS CONFIGURATION
+# Uses ONLY validators designed to BLOCK dangerous content (not require specific formats)
+# Fast, reliable validation for trauma-informed military mental health context
 
 GUARDRAIL_CONFIG = {
-    # 1. Crisis / Escalation Detection
+    # 🛑 1. Crisis / Escalation Detection (HIGH PRIORITY)
     "crisis_escalation": [
-        # (SensitiveTopic, {"sensitive_topics": ["suicide", "self_harm", "crisis"], "on_fail": "exception"}),
-        (ToxicLanguage, {}),
-        (LlamaGuard7B, {"policies": ["O1", "O2", "O6"]}), # Violence, Harm, Self-Harm
+        (ToxicLanguage, {
+            "threshold": 0.3,  # Very low threshold to catch crisis/suicidal content
+            "on_fail": "exception"
+        })
     ],
-    "sexual_content": [
-        (LlamaGuard7B, {"policies": ["O2"]}), # Sexual Content
+    "llm_validation": [
+        (LlamaGuard7B, {
+            "policies": ["O1", "O2", "O3", "O4", "O5", "O6"],
+            "on_fail": "exception"
+        })
     ],
-    # 2. Jailbreak Attempts
+
+    # 🧨 2. Jailbreak Detection (FAST)
     "jailbreak": [
-        (DetectJailbreak, {}),
-        # (UnusualPrompt, {}),
-        (LlamaGuard7B, {"policies": ["S1", "S2"]}), # Security & Jailbreak policies
+        (DetectJailbreak, {
+            "threshold": 0.81,
+            "on_fail": "exception"
+        }),
+        # (UnusualPrompt, {
+        #     "on_fail": "exception"
+        # })
+
     ],
-    # 3. Out-of-Domain / Irrelevant Queries
-    "out_of_domain": [
-        # LlamaGuard7B can handle some out-of-domain queries. A custom guard would be better.
-        (LlamaGuard7B, {"policies": ["O7"]}), # Off-topic policy
-    ],
-    # 4. Privacy-Breaching Prompts
+
+    # 🛡 3. Privacy-Breaching Prompts (FAST PII DETECTION)
     "privacy": [
-        # ShieldGemma2B and LlamaGuard7B are good candidates for PII detection.
-        (ShieldGemma2B, {}),
-        (LlamaGuard7B, {"policies": ["S5"]}), # PII policy
+        (DetectPII, {
+            "pii_entities": ["PERSON", "EMAIL_ADDRESS", "PHONE_NUMBER", "SSN", "CREDIT_CARD"],
+            "on_fail": "exception"
+        })
     ],
-    # 5. Profanity / Hate / Harassment
+
+    # 🤬 4. Profanity / Hate / Harassment (FAST)
     "profanity_hate_harassment": [
-        (ProfanityFree, {}),
-        (ToxicLanguage, {}),
-        # (LlamaGuard7B, {"policies": ["O3", "O4"]}), # Hate & Harassment policies
+        (ToxicLanguage, {
+            "threshold": 0.7,  # Standard threshold for general toxicity
+            "on_fail": "exception"
+        }),
+        (ProfanityFree, {
+            "on_fail": "exception"
+        })
     ],
-    # 6. Sensitive Military Context
-    "sensitive_military": [
-        # (SensitiveTopic, {"sensitive_topics": ["ptsd", "combat", "veteran", "military"], "on_fail": "exception"}),
-        (LlamaGuard7B, {"policies": ["O5"]}), # Self-harm policy is relevant here
-    ],
-    # 7. Prompt Injection / Manipulation
-    "prompt_injection": [
-        # (UnusualPrompt, {}),
-        (DetectJailbreak, {}),
-        (ShieldGemma2B, {}),
-    ],
-    # 8. Philosophical or Misdirected Edge Cases
-    "misdirected_edge_cases": [
-        # A dedicated Hallucination or OutOfDomain guard would be ideal here.
-        # LlamaGuard7B can provide a baseline of protection.
-        (LlamaGuard7B, {}),
-    ],
+    "topic_detection": [
+        (SensitiveTopic, {
+            "sensitive_topics": ["entertainment", "sports", "politics", "Taylor Swift", "Elon Musk", "concert", "movie"],
+            "on_fail": "exception"
+        })
+    ]
 }
 
-# Predefined policies for convenience
+# TRAUMA-INFORMED POLICIES  
 GUARDRAIL_POLICIES = {
-    "strict": [
+    # High-security policy for crisis scenarios
+    "crisis_ready": [
         "crisis_escalation",
-        "jailbreak",
+        "profanity_hate_harassment",
+        "privacy",
+        "jailbreak"
+    ],
+    
+    # Balanced policy for general military mental health conversations
+    "military_mental_health": [
+        "crisis_escalation",
+        "profanity_hate_harassment", 
+        "jailbreak"
+    ],
+    
+    # Strict policy with all guardrails (maximum protection)
+    "maximum_protection": [
+        "crisis_escalation",
+        "jailbreak", 
         "privacy",
         "profanity_hate_harassment",
-        "prompt_injection",
+        # "llm_validation",
     ],
-    "moderate": [
+    
+    # Performance-optimized policy (essential guards only)
+    "performance_optimized": [
         "crisis_escalation",
-        "profanity_hate_harassment",
+        "profanity_hate_harassment"
     ],
-    "basic": [
-        "profanity_hate_harassment",
-    ]
+    
+    # Legacy policies (kept for compatibility)
+    "strict": ["crisis_escalation", "jailbreak", "privacy", "profanity_hate_harassment"],
+    "moderate": ["crisis_escalation", "profanity_hate_harassment"],
+    "basic": ["profanity_hate_harassment"]
 } 

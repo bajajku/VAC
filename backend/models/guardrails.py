@@ -7,6 +7,12 @@ from config.guardrails_config import GUARDRAIL_CONFIG, GUARDRAIL_POLICIES
 
 ValidationStrategy = Literal["solo", "multiple", "all"]
 
+class ValidationException(ValueError):
+    """Exception raised when validation fails"""
+    def __init__(self, message, results):
+        super().__init__(message)
+        self.results = results
+
 class GuardValidationResult(BaseModel):
     """Structured validation result"""
     passed: bool
@@ -235,6 +241,6 @@ class Guardrails(BaseModel):
                 validation_failed = True
 
         if raise_on_fail and validation_failed:
-            raise ValueError("Validation failed. Check results for details.")
+            raise ValidationException("Validation failed. Check results for details.", results)
 
         return results
