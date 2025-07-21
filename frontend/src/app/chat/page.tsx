@@ -240,7 +240,7 @@ const ChatPage = () => {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder('utf-8');
       let fullText = '';
-                const collectedSources: string[] = [];
+      const collectedSources: string[] = [];
       let botMessageId: number | null = null;
       
       if (reader) {
