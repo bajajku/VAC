@@ -95,6 +95,23 @@ class FeedbackRequest(BaseModel):
     feedback_text: Optional[str] = None
     rating: Optional[int] = None
     user_id: Optional[str] = None
+    
+    # Detailed feedback categories (1-5 star ratings)
+    retrieval_relevance: Optional[int] = None
+    hallucination: Optional[int] = None
+    noise_robustness: Optional[int] = None
+    negative_rejection: Optional[int] = None
+    privacy_breach: Optional[int] = None
+    malicious_use: Optional[int] = None
+    security_breach: Optional[int] = None
+    out_of_domain: Optional[int] = None
+    completeness: Optional[int] = None
+    brand_damage: Optional[int] = None
+    
+    # Additional feedback fields
+    vote: Optional[str] = None
+    comment: Optional[str] = None
+    expert_notes: Optional[str] = None
 
 class NewSessionRequest(BaseModel):
     user_id: Optional[str] = None
@@ -950,8 +967,9 @@ async def stream_query(
         except Exception as e:
             print(f"Warning: Could not store user message: {e}")
         
-        # Collect the full AI response
+        # Collect the full AI response and sources
         full_response = ""
+        collected_sources = []
         
         # Stream the response
         for chunk in rag_app.stream_query(request.question, session_id):
@@ -963,15 +981,18 @@ async def stream_query(
             if isinstance(chunk[0], ToolMessage):
                 sources = extract_sources_from_toolmessage(chunk[0].content)
                 for source in sources:
+                    if source and source not in collected_sources:
+                        collected_sources.append(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
-        # Store AI response
+        # Store AI response with sources
         try:
             if full_response.strip():
                 ai_message = ChatMessage(
                     content=full_response,
                     sender="assistant",
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
+                    sources=collected_sources
                 )
                 await chat_session_service.add_message(session_id, ai_message)
         except Exception as e:
