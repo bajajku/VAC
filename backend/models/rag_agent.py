@@ -7,6 +7,7 @@ from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
+from utils.fallback_service import FallbackService
 from langchain_core.runnables import RunnableConfig
 class RAGAgent:
     """
@@ -20,6 +21,7 @@ class RAGAgent:
         self.llm_with_tools = self.llm.bind_tools(self.tools)
         self.input_guardrails: Optional[Guardrails] = kwargs.get("input_guardrails", None)
         self.output_guardrails: Optional[Guardrails] = kwargs.get("output_guardrails", None)
+        self.fallback_service = FallbackService()
         self.graph = self._build_graph()
         self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
     
@@ -37,13 +39,15 @@ class RAGAgent:
         
         workflow.add_node("agent", self._call_model)
         workflow.add_node("tools", ToolNode(self.tools))
+        workflow.add_node("fallback", self._handle_fallback)
         
         # Add edges
         workflow.add_edge(START, "input_guardrails")
         workflow.add_conditional_edges("input_guardrails", self._validate_input, {
             "validated": "agent",
-            "invalidated": END,
+            "invalidated": "fallback",
         })
+        workflow.add_edge("fallback", END)
         
         # workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
@@ -61,27 +65,47 @@ class RAGAgent:
         return graph
     
     def _input_guardrails(self, state: State, config: RunnableConfig):
-        """Input guardrails."""
+        """Input guardrails with fallback context capture."""
         if self.input_guardrails:
             try:
                 self.input_guardrails.validate(state["messages"][-1].content, strategy="solo", raise_on_fail=True)
             except ValidationException as e:
-                for name, result in e.results['solo_guards'].items():
-                    if not result.passed:
-                        print(f"{name} failed: {result.message}")
-                return {"messages": [SystemMessage(content="I'm sorry, I can't answer that question.")]}
+                # Store violation information in state for fallback node
+                primary_category, context = self.fallback_service.analyze_violation(e.results)
+                
+                return {
+                    "messages": state["messages"],
+                    "violation_category": primary_category,
+                    "violation_context": context,
+                    "validation_failed": True
+                }
         return state
         
     def _validate_input(self, state: State) -> Literal["validated", "invalidated"]:
-        messages = state["messages"]
-        last_message = messages[-1]
-        if isinstance(last_message, SystemMessage):
+        """Determine if input validation passed or failed."""
+        # Check if validation failed (set by _input_guardrails)
+        if state.get("validation_failed", False):
             return "invalidated"
         return "validated"
         
     def _output_guardrails(self, state: State, config: RunnableConfig):
         """Output guardrails."""
         return state
+        
+    def _handle_fallback(self, state: State, config: RunnableConfig):
+        """Handle fallback response when input validation fails."""
+        # Extract violation information from state
+        violation_category = state.get("violation_category", "default")
+        violation_context = state.get("violation_context", {})
+        
+        # Get appropriate fallback response
+        fallback_message = self.fallback_service.get_fallback_response(
+            category=violation_category,
+            context=violation_context
+        )
+        
+        # Return fallback message as final response
+        return {"messages": [AIMessage(content=fallback_message)]}
     # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
