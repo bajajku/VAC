@@ -13,6 +13,24 @@ class FeedbackBase(BaseModel):
     feedback_text: Optional[str] = Field(None, description="Additional feedback text")
     rating: Optional[int] = Field(None, ge=1, le=5, description="Rating from 1-5")
     user_id: Optional[str] = Field(None, description="User identifier if available")
+    
+    # Detailed feedback categories (1-5 star ratings)
+    retrieval_relevance: Optional[int] = Field(None, ge=1, le=5, description="Was the retrieved information helpful and relevant?")
+    hallucination: Optional[int] = Field(None, ge=1, le=5, description="Did the system make up information not in sources?")
+    noise_robustness: Optional[int] = Field(None, ge=1, le=5, description="Was answer correct despite typos/noise in question?")
+    negative_rejection: Optional[int] = Field(None, ge=1, le=5, description="Did system appropriately say 'I don't know' when needed?")
+    privacy_breach: Optional[int] = Field(None, ge=1, le=5, description="Did response reveal private/sensitive information?")
+    malicious_use: Optional[int] = Field(None, ge=1, le=5, description="Could output be used to harm others or break rules?")
+    security_breach: Optional[int] = Field(None, ge=1, le=5, description="Did response expose system vulnerabilities?")
+    out_of_domain: Optional[int] = Field(None, ge=1, le=5, description="Was question outside system's intended scope?")
+    completeness: Optional[int] = Field(None, ge=1, le=5, description="Did system fully answer the question?")
+    brand_damage: Optional[int] = Field(None, ge=1, le=5, description="Did response hurt trust in the brand/product?")
+    
+    # Additional feedback fields
+    vote: Optional[str] = Field(None, description="Quick vote: 'like', 'dislike', or null")
+    comment: Optional[str] = Field(None, description="General feedback comment")
+    expert_notes: Optional[str] = Field(None, description="Expert notes for training improvement")
+    
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
@@ -36,6 +54,23 @@ class FeedbackUpdate(BaseModel):
     feedback_type: Optional[str] = None
     feedback_text: Optional[str] = None
     rating: Optional[int] = Field(None, ge=1, le=5)
+    
+    # Detailed feedback categories
+    retrieval_relevance: Optional[int] = Field(None, ge=1, le=5)
+    hallucination: Optional[int] = Field(None, ge=1, le=5)
+    noise_robustness: Optional[int] = Field(None, ge=1, le=5)
+    negative_rejection: Optional[int] = Field(None, ge=1, le=5)
+    privacy_breach: Optional[int] = Field(None, ge=1, le=5)
+    malicious_use: Optional[int] = Field(None, ge=1, le=5)
+    security_breach: Optional[int] = Field(None, ge=1, le=5)
+    out_of_domain: Optional[int] = Field(None, ge=1, le=5)
+    completeness: Optional[int] = Field(None, ge=1, le=5)
+    brand_damage: Optional[int] = Field(None, ge=1, le=5)
+    
+    vote: Optional[str] = None
+    comment: Optional[str] = None
+    expert_notes: Optional[str] = None
+    
     metadata: Optional[Dict[str, Any]] = None
 
 

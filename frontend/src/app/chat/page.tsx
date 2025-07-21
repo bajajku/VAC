@@ -28,6 +28,19 @@ type FeedbackData = {
   accuracy?: number;
   helpfulness?: number;
   clarity?: number;
+  
+  // Detailed feedback categories (1-5 star ratings)
+  retrieval_relevance?: number;
+  hallucination?: number;
+  noise_robustness?: number;
+  negative_rejection?: number;
+  privacy_breach?: number;
+  malicious_use?: number;
+  security_breach?: number;
+  out_of_domain?: number;
+  completeness?: number;
+  brand_damage?: number;
+  
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
