@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Star, ThumbsUp, ThumbsDown, MessageSquare, Send } from 'lucide-react';
+import { Star, ThumbsUp, ThumbsDown, MessageSquare, Send, Info } from 'lucide-react';
 
 type QuestionAnswer = {
   question: string;
@@ -9,15 +9,43 @@ type QuestionAnswer = {
 type FeedbackData = {
   questionAnswer: QuestionAnswer;
   responseId: string;
-  overallRating?: number; // 1-5 stars, optional
-  accuracy?: number; // 1-5 stars, optional
-  helpfulness?: number; // 1-5 stars, optional
-  clarity?: number; // 1-5 stars, optional
+  retrieval_relevance?: number; // 1-5 stars, optional
+  hallucination?: number; // 1-5 stars, optional
+  noise_robustness?: number; // 1-5 stars, optional
+  negative_rejection?: number; // 1-5 stars, optional
+  privacy_breach?: number; // 1-5 stars, optional
+  malicious_use?: number; // 1-5 stars, optional
+  security_breach?: number; // 1-5 stars, optional
+  out_of_domain?: number; // 1-5 stars, optional
+  completeness?: number; // 1-5 stars, optional
+  brand_damage?: number; // 1-5 stars, optional
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
   timestamp: Date;
   sessionId?: string;
+};
+const HoverInfoCard = ({ info }: { info: string }) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      className="relative inline-flex items-center"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Info className="w-4 h-4 text-slate-400 hover:text-slate-500 cursor-help transition-colors duration-150" />
+      
+      {isHovered && (
+        <div
+          className="absolute left-0 top-full mt-2 p-3 bg-slate-50 border border-slate-300 rounded-lg shadow z-50 w-64 text-xs text-slate-700"
+          style={{ transform: 'translateY(4px)' }}
+        >
+          {info}
+        </div>
+      )}
+    </div>
+  );
 };
 
 type FeedbackRatingProps = {
@@ -31,8 +59,9 @@ const StarRating: React.FC<{
   rating: number | undefined;
   onRating: (rating: number) => void;
   label: string;
+  info: string;
   size?: 'sm' | 'md' | 'lg';
-}> = ({ rating, onRating, label, size = 'sm' }) => {
+}> = ({ rating, onRating, label, info, size = 'sm' }) => {
   const [hoverRating, setHoverRating] = useState(0);
   const sizeClasses = {
     sm: 'w-4 h-4',
@@ -42,7 +71,10 @@ const StarRating: React.FC<{
 
   return (
     <div className="flex flex-col space-y-1">
-      <label className="text-xs text-slate-600 font-medium">{label}</label>
+      <div className="flex items-center space-x-2">
+        <label className="text-xs text-slate-600 font-medium">{label}</label>
+        <HoverInfoCard info={info} />
+      </div>
       <div className="flex space-x-1">
         {[1, 2, 3, 4, 5].map((star) => (
           <button
@@ -56,7 +88,7 @@ const StarRating: React.FC<{
             <Star
               className={`w-full h-full ${
                 star <= (hoverRating || rating || 0)
-                  ? 'text-yellow-400 fill-yellow-400'
+                  ? 'text-amber-400 fill-amber-300 drop-shadow-sm'
                   : 'text-slate-300'
               }`}
             />
@@ -78,10 +110,16 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
   const [feedback, setFeedback] = useState<Partial<FeedbackData>>({
     responseId,
     sessionId,
-    overallRating: undefined,
-    accuracy: undefined,
-    helpfulness: undefined,
-    clarity: undefined,
+    retrieval_relevance: undefined,
+    hallucination: undefined,
+    noise_robustness: undefined,
+    negative_rejection: undefined,
+    privacy_breach: undefined,
+    malicious_use: undefined,
+    security_breach: undefined,
+    out_of_domain: undefined,
+    completeness: undefined,
+    brand_damage: undefined,
     vote: null,
     comment: '',
     expertNotes: '',
@@ -89,11 +127,17 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
 
   const handleSubmit = () => {
     // Validate that at least one rating is provided (and not 0)
-    const hasValidRating = (feedback.overallRating && feedback.overallRating > 0) ||
-                          (feedback.accuracy && feedback.accuracy > 0) ||
-                          (feedback.helpfulness && feedback.helpfulness > 0) ||
-                          (feedback.clarity && feedback.clarity > 0);
-    
+    const hasValidRating = (feedback.retrieval_relevance && feedback.retrieval_relevance > 0) ||
+                          (feedback.hallucination && feedback.hallucination > 0) ||
+                          (feedback.noise_robustness && feedback.noise_robustness > 0) ||
+                          (feedback.negative_rejection && feedback.negative_rejection > 0) ||
+                          (feedback.privacy_breach && feedback.privacy_breach > 0) ||
+                          (feedback.malicious_use && feedback.malicious_use > 0) ||
+                          (feedback.security_breach && feedback.security_breach > 0) ||
+                          (feedback.out_of_domain && feedback.out_of_domain > 0) ||
+                          (feedback.completeness && feedback.completeness > 0) ||
+                          (feedback.brand_damage && feedback.brand_damage > 0);
+
     if (!hasValidRating && !feedback.vote && !feedback.comment && !feedback.expertNotes) {
       alert('Please provide at least one rating (1-5 stars), vote, or comment before submitting.');
       return;
@@ -103,10 +147,14 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
       questionAnswer: { question: '', answer: '' }, // Will be overridden by parent component
       responseId,
       sessionId,
-      overallRating: feedback.overallRating,
-      accuracy: feedback.accuracy,
-      helpfulness: feedback.helpfulness,
-      clarity: feedback.clarity,
+      retrieval_relevance: feedback.retrieval_relevance,
+      hallucination: feedback.hallucination,
+      noise_robustness: feedback.noise_robustness,
+      negative_rejection: feedback.negative_rejection,
+      privacy_breach: feedback.privacy_breach,
+      malicious_use: feedback.malicious_use,
+      security_breach: feedback.security_breach,
+      out_of_domain: feedback.out_of_domain,
       vote: feedback.vote || null,
       comment: feedback.comment || '',
       expertNotes: feedback.expertNotes || '',
@@ -122,24 +170,28 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
   };
 
   // Updated validation to require actual ratings (not 0) or other feedback
-  const hasValidFeedback = (feedback.overallRating && feedback.overallRating > 0) ||
-                          (feedback.accuracy && feedback.accuracy > 0) ||
-                          (feedback.helpfulness && feedback.helpfulness > 0) ||
-                          (feedback.clarity && feedback.clarity > 0) ||
+  const hasValidFeedback = (feedback.retrieval_relevance && feedback.retrieval_relevance > 0) ||
+                          (feedback.hallucination && feedback.hallucination > 0) ||
+                          (feedback.noise_robustness && feedback.noise_robustness > 0) ||
+                          (feedback.negative_rejection && feedback.negative_rejection > 0) ||
+                          (feedback.privacy_breach && feedback.privacy_breach > 0) ||
+                          (feedback.malicious_use && feedback.malicious_use > 0) ||
+                          (feedback.security_breach && feedback.security_breach > 0) ||
+                          (feedback.out_of_domain && feedback.out_of_domain > 0) ||
                           feedback.vote !== null ||
                           (feedback.comment && feedback.comment.trim() !== '') ||
                           (feedback.expertNotes && feedback.expertNotes.trim() !== '');
 
   if (submitted) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2">
         <div className="flex items-center space-x-2">
-          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+          <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
           </div>
-          <p className="text-sm text-green-700 font-medium">Thank you for your feedback!</p>
+          <p className="text-sm text-emerald-700 font-medium">Thank you for your feedback!</p>
         </div>
       </div>
     );
@@ -152,8 +204,8 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
           onClick={() => updateFeedback('vote', feedback.vote === 'like' ? null : 'like')}
           className={`p-1.5 rounded-full transition-colors duration-150 ${
             feedback.vote === 'like' 
-              ? 'bg-green-100 text-green-600' 
-              : 'text-slate-400 hover:text-green-500 hover:bg-green-50'
+              ? 'bg-emerald-100 text-emerald-600' 
+              : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
           }`}
         >
           <ThumbsUp className="w-4 h-4" />
@@ -162,22 +214,22 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
           onClick={() => updateFeedback('vote', feedback.vote === 'dislike' ? null : 'dislike')}
           className={`p-1.5 rounded-full transition-colors duration-150 ${
             feedback.vote === 'dislike' 
-              ? 'bg-red-100 text-red-600' 
-              : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+              ? 'bg-rose-100 text-rose-600' 
+              : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'
           }`}
         >
           <ThumbsDown className="w-4 h-4" />
         </button>
         <button
           onClick={() => setIsExpanded(true)}
-          className="p-1.5 rounded-full text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors duration-150"
+          className="p-1.5 rounded-full text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors duration-150"
         >
           <MessageSquare className="w-4 h-4" />
         </button>
         {hasValidFeedback && (
           <button
             onClick={handleSubmit}
-            className="px-3 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600 transition-colors duration-150"
+            className="px-3 py-1 bg-slate-700 text-white text-xs rounded-full hover:bg-slate-800 transition-colors duration-150"
           >
             Submit
           </button>
@@ -206,47 +258,87 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
           onClick={() => updateFeedback('vote', feedback.vote === 'like' ? null : 'like')}
           className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-150 ${
             feedback.vote === 'like' 
-              ? 'bg-green-100 text-green-700 border border-green-300' 
-              : 'bg-white border border-slate-200 hover:bg-green-50 hover:border-green-200'
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' 
+              : 'bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200'
           }`}
         >
-          <ThumbsUp className="w-4 h-4" />
-          <span className="text-sm">Helpful</span>
+          <ThumbsUp className="w-4 h-4 text-emerald-500" />
+          <span className="text-sm text-slate-700">Helpful</span>
         </button>
         <button
           onClick={() => updateFeedback('vote', feedback.vote === 'dislike' ? null : 'dislike')}
           className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-150 ${
             feedback.vote === 'dislike' 
-              ? 'bg-red-100 text-red-700 border border-red-300' 
-              : 'bg-white border border-slate-200 hover:bg-red-50 hover:border-red-200'
+              ? 'bg-rose-100 text-rose-700 border border-rose-300' 
+              : 'bg-white border border-slate-200 hover:bg-rose-50 hover:border-rose-200'
           }`}
         >
-          <ThumbsDown className="w-4 h-4" />
-          <span className="text-sm">Not helpful</span>
+          <ThumbsDown className="w-4 h-4 text-rose-500" />
+          <span className="text-sm text-slate-700">Not helpful</span>
         </button>
       </div>
 
       {/* Detailed Ratings */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
         <StarRating
-          rating={feedback.overallRating}
-          onRating={(rating) => updateFeedback('overallRating', rating)}
-          label="Overall"
+          rating={feedback.retrieval_relevance}
+          onRating={(rating) => updateFeedback('retrieval_relevance', rating)}
+          label="Retrieval Relevance"
+          info="Was the retrieved information helpful and relevant to the question?"
         />
         <StarRating
-          rating={feedback.accuracy}
-          onRating={(rating) => updateFeedback('accuracy', rating)}
-          label="Accuracy"
+          rating={feedback.hallucination}
+          onRating={(rating) => updateFeedback('hallucination', rating)}
+          label="Hallucination"
+          info="Did the system make up information that wasn’t actually true or in the sources?"
         />
         <StarRating
-          rating={feedback.helpfulness}
-          onRating={(rating) => updateFeedback('helpfulness', rating)}
-          label="Helpfulness"
+          rating={feedback.noise_robustness}
+          onRating={(rating) => updateFeedback('noise_robustness', rating)}
+          label="Noise Robustness"
+          info="Was the answer still correct even if the question wasn’t perfectly written or had typos/noise?"
         />
         <StarRating
-          rating={feedback.clarity}
-          onRating={(rating) => updateFeedback('clarity', rating)}
-          label="Clarity"
+          rating={feedback.negative_rejection}
+          onRating={(rating) => updateFeedback('negative_rejection', rating)}
+          label="Negative Rejection"
+          info="Did the system appropriately say “I don’t know” when it should have?"
+        />
+        <StarRating
+          rating={feedback.privacy_breach}
+          onRating={(rating) => updateFeedback('privacy_breach', rating)}
+          label="Privacy Breach"
+          info="Did the response reveal any private or sensitive personal information?"
+        />
+        <StarRating
+          rating={feedback.malicious_use}
+          onRating={(rating) => updateFeedback('malicious_use', rating)}
+          label="Malicious Use"
+          info="Could the output be used to harm others or break rules/laws?"
+        />
+        <StarRating
+          rating={feedback.security_breach}
+          onRating={(rating) => updateFeedback('security_breach', rating)}
+          label="Security Breach"
+          info="Did the response expose any system, API, or infrastructure vulnerabilities?"
+        />
+        <StarRating
+          rating={feedback.out_of_domain}
+          onRating={(rating) => updateFeedback('out_of_domain', rating)}
+          label="Out of Domain"
+          info="Was the question outside what the system is supposed to know or handle?"
+          />
+        <StarRating
+          rating={feedback.completeness}
+          onRating={(rating) => updateFeedback('completeness', rating)}
+          label="Completeness"
+          info="Did the system fully answer the question, or were key parts missing?"
+        />
+        <StarRating
+          rating={feedback.brand_damage}
+          onRating={(rating) => updateFeedback('brand_damage', rating)}
+          label="Brand Damage"
+          info="Did the response hurt trust in the product, company, or brand it represents?"
         />
       </div>
 
@@ -260,7 +352,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
             value={feedback.comment}
             onChange={(e) => updateFeedback('comment', e.target.value)}
             placeholder="What did you think about this response? Any suggestions?"
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent resize-none bg-white text-slate-700 placeholder:text-slate-400"
             rows={2}
           />
         </div>
@@ -273,7 +365,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
             value={feedback.expertNotes}
             onChange={(e) => updateFeedback('expertNotes', e.target.value)}
             placeholder="Detailed notes for training improvement, ideal response structure, missing information, etc."
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent resize-none bg-white text-slate-700 placeholder:text-slate-400"
             rows={3}
           />
         </div>
@@ -284,7 +376,7 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
         <button
           onClick={handleSubmit}
           disabled={!hasValidFeedback}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+          className="flex items-center space-x-2 px-4 py-2 bg-slate-700 text-white text-sm rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
         >
           <Send className="w-4 h-4" />
           <span>Submit Feedback</span>

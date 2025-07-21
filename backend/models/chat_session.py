@@ -12,6 +12,7 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="Message content")
     sender: str = Field(..., description="Message sender: 'user' or 'assistant'")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    sources: Optional[List[str]] = Field(default_factory=list, description="List of source URLs/references for assistant messages")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
