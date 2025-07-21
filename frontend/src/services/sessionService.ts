@@ -9,6 +9,7 @@ export type ChatMessage = {
   content: string;
   sender: 'user' | 'assistant';
   timestamp: string;
+  sources?: string[];
   metadata?: Record<string, unknown>;
 };
 
@@ -245,7 +246,7 @@ class SessionService {
       sender: backendMessage.sender === 'assistant' ? 'bot' : backendMessage.sender,
       timestamp: new Date(backendMessage.timestamp),
       feedbackSubmitted: false,
-      sources: []
+      sources: backendMessage.sources || []
     };
   }
 
