@@ -1118,7 +1118,24 @@ async def create_feedback(request: FeedbackRequest):
             feedback_type=request.feedback_type,
             feedback_text=request.feedback_text,
             rating=request.rating,
-            user_id=request.user_id
+            user_id=request.user_id,
+            
+            # Pass all detailed feedback fields from the request
+            retrieval_relevance=request.retrieval_relevance,
+            hallucination=request.hallucination,
+            noise_robustness=request.noise_robustness,
+            negative_rejection=request.negative_rejection,
+            privacy_breach=request.privacy_breach,
+            malicious_use=request.malicious_use,
+            security_breach=request.security_breach,
+            out_of_domain=request.out_of_domain,
+            completeness=request.completeness,
+            brand_damage=request.brand_damage,
+            
+            # Pass additional feedback fields
+            vote=request.vote,
+            comment=request.comment,
+            expert_notes=request.expert_notes
         )
         
         feedback = await feedback_service.create_feedback(feedback_data)
