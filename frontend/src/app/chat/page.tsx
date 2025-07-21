@@ -168,98 +168,122 @@ const ChatPage = () => {
     setLastAnswer('');
   };
 
-  const handleSendMessage = async (e?: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>) => {
+  const handleSendMessage = (e?: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
-    if (!inputText.trim()) return;
-
+    if (!inputText.trim() || isTyping) return;
+  
     const userMessage: Message = {
       id: Date.now(),
       text: inputText,
       sender: 'user',
       timestamp: new Date()
     };
-
+  
     setMessages(prev => [...prev, userMessage]);
+    setLastQuestion(inputText);
     setInputText('');
     setIsTyping(true);
+  };
 
-    try {
-      // Try to refresh token if needed
-      const token = Cookies.get('token');
-      if (!token) {
-        router.push('/auth/login');
-        return;
-      }
+  useEffect(() => {
+    if (!isTyping || !lastQuestion) return;
+  
+    const processStream = async () => {
+      try {
+        const token = Cookies.get('token');
+        if (!token) {
+          router.push('/auth/login');
+          return;
+        }
+  
+        // Try to decode the token to check expiration
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(atob(tokenParts[1]));
+          const expiresAt = payload.exp * 1000; // Convert to milliseconds
+          const now = Date.now();
+          const fiveMinutes = 5 * 60 * 1000;
 
-      // Try to decode the token to check expiration
-      const tokenParts = token.split('.');
-      if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
-        const expiresAt = payload.exp * 1000; // Convert to milliseconds
-        const now = Date.now();
-        const fiveMinutes = 5 * 60 * 1000;
+          // If token expires in less than 5 minutes, refresh it
+          if (expiresAt - now < fiveMinutes) {
+            const refreshToken = Cookies.get('refresh_token');
+            if (refreshToken) {
+              const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify({ refresh_token: refreshToken })
+              });
 
-        // If token expires in less than 5 minutes, refresh it
-        if (expiresAt - now < fiveMinutes) {
-          const refreshToken = Cookies.get('refresh_token');
-          if (refreshToken) {
-            const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
-              },
-              body: JSON.stringify({ refresh_token: refreshToken })
-            });
-
-            if (refreshResponse.ok) {
-              const data = await refreshResponse.json();
-              Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
-              Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
-            } else {
-              router.push('/auth/login');
-              return;
+              if (refreshResponse.ok) {
+                const data = await refreshResponse.json();
+                Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
+                Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
+              } else {
+                router.push('/auth/login');
+                return;
+              }
             }
           }
         }
-      }
 
-      const response = await fetch(`${BASE_URL}/stream_async`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Cookies.get('token')}`,
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ 
-          question: inputText,
-          session_id: sessionId
-        })
-      });
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let fullText = '';
-      const collectedSources: string[] = [];
-      let botMessageId: number | null = null;
-      
-      if (reader) {
+        const response = await fetch(`${BASE_URL}/stream_async`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({
+            question: lastQuestion,
+            session_id: sessionId
+          })
+        });
+  
+        if (!response.body) {
+          throw new Error("Response body is null");
+        }
+  
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+        const collectedSources: string[] = [];
+        let botMessageId: number | null = null;
+  
         while (true) {
           const { value, done } = await reader.read();
-          if (done) break;
-      
-          const chunk = decoder.decode(value);
-          console.log('Raw chunk:', chunk);
-      
+          if (done) {
+            setIsTyping(false);
+            setLastAnswer(fullText);
+            if (sessionManagerRef.current) {
+              sessionManagerRef.current.refreshSessions();
+            }
+            // Final update with sources
+            if (collectedSources.length > 0 && botMessageId) {
+              setMessages(prev =>
+                prev.map(msg =>
+                  msg.id === botMessageId
+                    ? { ...msg, text: fullText, sources: collectedSources }
+                    : msg
+                )
+              );
+            }
+            break; // Exit the loop
+          }
+  
+          const chunk = decoder.decode(value, { stream: true });
           // Remove "data: " prefix
           let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
-          
+      
           // Extract and remove session_id BEFORE processing other content
           if (cleanChunk.includes('[SESSION_ID]')) {
             const sessionMatch = cleanChunk.match(/\[SESSION_ID\](.*?)\[\/SESSION_ID\]/);
             if (sessionMatch && !sessionId) {
-              setSessionId(sessionMatch[1]);
-              localStorage.setItem('chatSessionId', sessionMatch[1]);
+              const newSessionId = sessionMatch[1];
+              setSessionId(newSessionId);
+              localStorage.setItem('chatSessionId', newSessionId);
             }
             // Remove session ID from the chunk so it doesn't appear in chat
             cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
@@ -284,68 +308,47 @@ const ChatPage = () => {
             // Remove source markers from the chunk so they don't appear in chat
             cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
           }
-          
+      
           // Only add to fullText if there's actual content after removing markers
           if (cleanChunk.trim()) {
             fullText += cleanChunk;
           }
 
           // Update UI progressively with text content only (no sources yet)
-          if (fullText.trim()) {
-            setMessages(prev => {
-              const last = prev[prev.length - 1];
-              if (last && last.sender === 'bot' && last.id === botMessageId) {
-                // Update existing bot message
-                return [...prev.slice(0, -1), { 
-                  ...last, 
-                  text: fullText
-                }];
-              } else {
-                // Create new bot message
-                const newBotMessage: Message = {
-                  id: Date.now() + 1,
-                  text: fullText,
-                  sender: 'bot',
-                  timestamp: new Date()
-                };
-                botMessageId = newBotMessage.id;
-                return [...prev, newBotMessage];
-              }
-            });
-          }
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.sender === 'bot' && last.id === botMessageId) {
+              return [...prev.slice(0, -1), { ...last, text: fullText, sources: collectedSources.length > 0 ? collectedSources : undefined }];
+            } else if (!botMessageId) {
+              const newBotMessage: Message = {
+                id: Date.now() + 1,
+                text: fullText,
+                sender: 'bot',
+                timestamp: new Date(),
+                sources: collectedSources.length > 0 ? collectedSources : undefined
+              };
+              botMessageId = newBotMessage.id;
+              return [...prev, newBotMessage];
+            }
+            return prev;
+          });
         }
-
-        // After streaming is complete, add sources to the final message
-        if (collectedSources.length > 0 && botMessageId) {
-          setMessages(prev => 
-            prev.map(msg => 
-              msg.id === botMessageId 
-                ? { ...msg, sources: collectedSources }
-                : msg
-            )
-          );
-        }
+  
+      } catch (error) {
+        console.error('Error sending message:', error);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          text: "I apologize, but I'm having trouble connecting right now. Please try again in a moment. If you need immediate support, please reach out to a healthcare professional or the Veterans Crisis Line.",
+          sender: 'bot',
+          timestamp: new Date()
+        }]);
+        setIsTyping(false);
       }
-      
-      setLastQuestion(inputText);
-      setLastAnswer(fullText);
-      
-      // Trigger session list refresh to update message counts
-      if (sessionManagerRef.current) {
-        sessionManagerRef.current.refreshSessions();
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: "I apologize, but I'm having trouble connecting right now. Please try again in a moment. If you need immediate support, please reach out to a healthcare professional or the Veterans Crisis Line.",
-        sender: 'bot',
-        timestamp: new Date()
-      }]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
+    };
+  
+    processStream();
+  
+  }, [isTyping, lastQuestion, sessionId, router]);
 
   const handleFeedbackSubmit = async (feedback: FeedbackData) => {
     try {
