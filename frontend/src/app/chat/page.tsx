@@ -394,86 +394,98 @@ const ChatPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 safe-area-inset-top safe-area-inset-bottom">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/50 px-4 sm:px-6 py-4 shadow-sm">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 shadow-sm mobile-header-landscape">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
             <Link 
               href="/" 
-              className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center transition-colors"
+              className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center transition-colors touch-target"
               aria-label="Return to home"
             >
               <ArrowLeft className="w-4 h-4 text-slate-600" />
             </Link>
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center">
+              <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-900">Confidential Support Session</h1>
-              <p className="text-sm text-slate-600">Secure • Private • Supportive</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm sm:text-lg font-semibold text-slate-900 truncate">Confidential Support Session</h1>
+              <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">Secure • Private • Supportive</p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <SessionManager
-              ref={sessionManagerRef}
-              currentSessionId={sessionId}
-              onSessionChange={handleSessionChange}
-              onNewSession={handleNewSession}
-            />
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <div className="hidden md:block">
+              <SessionManager
+                ref={sessionManagerRef}
+                currentSessionId={sessionId}
+                onSessionChange={handleSessionChange}
+                onNewSession={handleNewSession}
+              />
+            </div>
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+              className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors touch-target"
               aria-label="Logout"
             >
               <LogOut className="w-4 h-4" />
               <span className="text-sm font-medium hidden sm:inline">Logout</span>
             </button>
-            <div className="flex items-center space-x-2">
+            <div className="hidden sm:flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-slate-600 hidden sm:inline">Secure Connection</span>
+              <span className="text-sm text-slate-600 hidden lg:inline">Secure Connection</span>
             </div>
           </div>
+        </div>
+        
+        {/* Mobile Session Manager */}
+        <div className="md:hidden mt-3">
+          <SessionManager
+            ref={sessionManagerRef}
+            currentSessionId={sessionId}
+            onSessionChange={handleSessionChange}
+            onNewSession={handleNewSession}
+          />
         </div>
       </header>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 mobile-scroll">
         <div className="max-w-4xl mx-auto">
           {/* Loading Session Indicator */}
           {isLoadingSession && (
             <div className="flex items-center justify-center py-8">
               <div className="flex items-center space-x-3">
                 <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                <span className="text-slate-600">Loading conversation...</span>
+                <span className="text-slate-600 text-sm">Loading conversation...</span>
               </div>
             </div>
           )}
           {!isLoadingSession && messages.map((message) => (
             <div
               key={message.id}
-              className={`flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-300 ${
+              className={`flex items-start space-x-2 sm:space-x-4 animate-in slide-in-from-bottom-2 duration-300 ${
                 message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''
               }`}
             >
               {/* Avatar */}
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${
                 message.sender === 'user' 
                   ? 'bg-gradient-to-r from-blue-500 to-blue-600' 
                   : 'bg-gradient-to-r from-indigo-500 to-purple-600'
               }`}>
                 {message.sender === 'user' ? (
-                  <User className="w-5 h-5 text-white" />
+                  <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 ) : (
-                  <Shield className="w-5 h-5 text-white" />
+                  <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 )}
               </div>
 
               {/* Message Content */}
-              <div className={`flex-1 max-w-2xl ${
+              <div className={`flex-1 max-w-[85%] sm:max-w-2xl ${
                 message.sender === 'user' ? 'items-end' : 'items-start'
               }`}>
-                <div className={`rounded-2xl px-4 py-3 shadow-sm ${
+                <div className={`rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm ${
                   message.sender === 'user'
                     ? 'bg-blue-600 text-white ml-auto'
                     : 'bg-white border border-slate-200 text-slate-800'
@@ -484,17 +496,17 @@ const ChatPage = () => {
                         remarkPlugins={[remarkGfm]}
                         components={{
                           // Custom components for better styling
-                          p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed text-sm text-slate-800">{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc pl-4 mb-3 space-y-1 text-slate-800">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal pl-4 mb-3 space-y-1 text-slate-800">{children}</ol>,
-                          li: ({ children }) => <li className="text-sm leading-relaxed text-slate-800">{children}</li>,
-                          h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 text-slate-800">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-base font-medium mb-2 text-slate-700">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-sm font-medium mb-1 text-slate-600">{children}</h3>,
+                          p: ({ children }) => <p className="mb-2 sm:mb-3 last:mb-0 leading-relaxed text-xs sm:text-sm text-slate-800">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800">{children}</ol>,
+                          li: ({ children }) => <li className="text-xs sm:text-sm leading-relaxed text-slate-800">{children}</li>,
+                          h1: ({ children }) => <h1 className="text-sm sm:text-lg font-semibold mb-2 text-slate-800">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-sm sm:text-base font-medium mb-2 text-slate-700">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-xs sm:text-sm font-medium mb-1 text-slate-600">{children}</h3>,
                           strong: ({ children }) => <strong className="font-semibold text-slate-800">{children}</strong>,
                           em: ({ children }) => <em className="italic text-slate-700">{children}</em>,
                           blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-blue-200 pl-3 py-1 my-2 bg-blue-50 rounded-r text-slate-700">
+                            <blockquote className="border-l-4 border-blue-200 pl-2 sm:pl-3 py-1 my-2 bg-blue-50 rounded-r text-slate-700">
                               {children}
                             </blockquote>
                           ),
@@ -502,20 +514,20 @@ const ChatPage = () => {
                             <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono text-slate-800">{children}</code>
                           )
                         }}
-                                              >
-                          {message.text}
-                        </ReactMarkdown>
+                      >
+                        {message.text}
+                      </ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
+                    <p className="text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">{message.text}</p>
                   )}
                 </div>
 
                 {/* Sources Section for Bot Messages */}
                 {message.sender === 'bot' && message.sources && message.sources.length > 0 && (
-                  <div className="mt-3 p-3 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-lg shadow-sm">
-                    <div className="flex items-center mb-2">
-                      <ExternalLink className="w-3 h-3 text-slate-500 mr-2" />
+                  <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-lg shadow-sm">
+                    <div className="flex items-center mb-1 sm:mb-2">
+                      <ExternalLink className="w-3 h-3 text-slate-500 mr-1 sm:mr-2" />
                       <span className="text-xs font-medium text-slate-600">Sources:</span>
                     </div>
                     <div className="space-y-1">
@@ -541,11 +553,11 @@ const ChatPage = () => {
                               href={source}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline block transition-colors duration-150 group-hover:bg-white/60 p-1 rounded"
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline block transition-colors duration-150 group-hover:bg-white/60 p-1 rounded touch-target"
                               title={source}
                             >
                               <div className="flex items-center space-x-1">
-                                <span className="font-medium">{getSourceTitle(source)}</span>
+                                <span className="font-medium text-xs">{getSourceTitle(source)}</span>
                                 <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                               </div>
                               <div className="text-slate-500 truncate mt-0.5 text-xs">
@@ -561,7 +573,7 @@ const ChatPage = () => {
 
                 {/* Sources Loading Indicator for Bot Messages while typing */}
                 {message.sender === 'bot' && isTyping && messages[messages.length - 1]?.id === message.id && (
-                  <div className="mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="mt-2 sm:mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
                       <span className="text-xs text-slate-500">Loading sources...</span>
@@ -569,7 +581,7 @@ const ChatPage = () => {
                   </div>
                 )}
                 
-                <div className={`flex items-center mt-2 space-x-2 ${
+                <div className={`flex items-center mt-1 sm:mt-2 space-x-2 ${
                   message.sender === 'user' ? 'justify-end' : 'justify-start'
                 }`}>
                   <span className="text-xs text-slate-500">
@@ -578,14 +590,14 @@ const ChatPage = () => {
                   {message.sender === 'bot' && message.feedbackSubmitted && (
                     <div className="flex items-center space-x-1">
                       <CheckCircle2 className="w-3 h-3 text-green-500" />
-                      <span className="text-xs text-green-600">Feedback received</span>
+                      <span className="text-xs text-green-600 hidden sm:inline">Feedback received</span>
                     </div>
                   )}
                 </div>
                 
                 {/* Feedback Component for Bot Messages */}
                 {message.sender === 'bot' && !message.feedbackSubmitted && message.id !== 1 && (
-                  <div className="mt-3">
+                  <div className="mt-2 sm:mt-3">
                     <FeedbackRating
                       responseId={message.id.toString()}
                       sessionId={sessionId || undefined}
@@ -608,18 +620,18 @@ const ChatPage = () => {
 
           {/* Typing Indicator */}
           {!isLoadingSession && isTyping && (
-            <div className="flex items-start space-x-4 animate-in slide-in-from-bottom-2 duration-300">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
-                <Shield className="w-5 h-5 text-white" />
+            <div className="flex items-start space-x-2 sm:space-x-4 animate-in slide-in-from-bottom-2 duration-300">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
+                <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
+              <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
                   <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                   <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
-              <span className="text-xs text-slate-500 self-end">Thinking...</span>
+              <span className="text-xs text-slate-500 self-end hidden sm:inline">Thinking...</span>
             </div>
           )}
 
@@ -628,19 +640,19 @@ const ChatPage = () => {
       </div>
 
       {/* Privacy Notice */}
-      <div className="px-4 sm:px-6 py-2 bg-blue-50/50 border-t border-blue-200/30">
+      <div className="px-3 sm:px-4 md:px-6 py-2 bg-blue-50/50 border-t border-blue-200/30">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center space-x-2 text-xs text-blue-700">
-            <AlertCircle className="w-3 h-3" />
-            <span>This conversation is confidential. For crisis situations, contact emergency services or the Veterans Crisis Line: 1-800-273-8255</span>
+          <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-blue-700">
+            <AlertCircle className="w-3 h-3 flex-shrink-0" />
+            <span className="leading-tight">This conversation is confidential. For crisis situations, contact emergency services or the Veterans Crisis Line: 1-800-273-8255</span>
           </div>
         </div>
       </div>
 
       {/* Input Area */}
-      <div className="bg-white/90 backdrop-blur-md border-t border-slate-200/50 px-4 sm:px-6 py-4">
+      <div className="bg-white/90 backdrop-blur-md border-t border-slate-200/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 mobile-input-landscape safe-area-inset-bottom">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="flex-1 relative">
               <input
                 ref={inputRef}
@@ -649,7 +661,7 @@ const ChatPage = () => {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(e)}
                 placeholder="Share what's on your mind... (Press Enter to send)"
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-slate-800 placeholder-slate-500 text-sm"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-slate-800 placeholder-slate-500 text-sm sm:text-base"
                 disabled={isTyping}
                 aria-label="Type your message"
               />
@@ -657,7 +669,7 @@ const ChatPage = () => {
             <button
               onClick={handleSendMessage}
               disabled={!inputText.trim() || isTyping}
-              className="w-11 h-11 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl flex items-center justify-center hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
+              className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl sm:rounded-2xl flex items-center justify-center hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95 touch-target"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />
