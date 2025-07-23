@@ -9,6 +9,9 @@ from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
 from utils.fallback_service import FallbackService
 from langchain_core.runnables import RunnableConfig
+from langchain_core.messages import ToolMessage
+from utils.helper import extract_sources_from_toolmessage
+
 class RAGAgent:
     """
     A RAG (Retrieval-Augmented Generation) agent using langgraph.
@@ -234,14 +237,18 @@ IMPORTANT:
         initial_state = {
             "messages": [HumanMessage(content=user_input)]
         }
-        
+        sources = []
+
         # Run the graph
         result = self.graph.invoke(initial_state, config=config)
-        
+        for chunk in result["messages"]:
+            if isinstance(chunk, ToolMessage):
+                sources = extract_sources_from_toolmessage(chunk.content)
+
         # Extract the final AI message
         final_message = result["messages"][-1]
         if isinstance(final_message, AIMessage):
-            return final_message.content
+            return final_message.content, sources
         else:
             return "I apologize, but I couldn't generate a proper response."
     
@@ -252,7 +259,7 @@ IMPORTANT:
         }
         
         result = await self.graph.ainvoke(initial_state, config=config)
-        
+
         final_message = result["messages"][-1]
         if isinstance(final_message, AIMessage):
             return final_message.content
