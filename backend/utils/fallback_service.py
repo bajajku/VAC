@@ -37,7 +37,7 @@ class FallbackService:
             # Crisis-related violations (highest priority)
             "crisis_escalation": enhanced_crisis_fallback_tool,
             "CrisisEscalation": enhanced_crisis_fallback_tool,
-            "crisis_escalation_ToxicLanguage": enhanced_crisis_fallback_tool,  # Full guard name
+            "crisis_escalation_LlamaGuard7B": enhanced_crisis_fallback_tool,  # Full guard name
             "ToxicLanguage": self._route_toxic_language,  # Could be crisis or profanity
             
             # Security violations
