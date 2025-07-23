@@ -314,18 +314,17 @@ const ChatPage = () => {
             fullText += cleanChunk;
           }
 
-          // Update UI progressively with text content only (no sources yet)
+          // Update UI progressively with text content only
           setMessages(prev => {
             const last = prev[prev.length - 1];
             if (last && last.sender === 'bot' && last.id === botMessageId) {
-              return [...prev.slice(0, -1), { ...last, text: fullText, sources: collectedSources.length > 0 ? collectedSources : undefined }];
-            } else if (!botMessageId) {
+              return [...prev.slice(0, -1), { ...last, text: fullText }];
+            } else if (!botMessageId && fullText) {
               const newBotMessage: Message = {
                 id: Date.now() + 1,
                 text: fullText,
                 sender: 'bot',
                 timestamp: new Date(),
-                sources: collectedSources.length > 0 ? collectedSources : undefined
               };
               botMessageId = newBotMessage.id;
               return [...prev, newBotMessage];
