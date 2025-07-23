@@ -9,14 +9,8 @@ from guardrails.hub import (
 GUARDRAIL_CONFIG = {
     # 🛑 1. Crisis / Escalation Detection (HIGH PRIORITY)
     "crisis_escalation": [
-        (ToxicLanguage, {
-            "threshold": 0.3,  # Very low threshold to catch crisis/suicidal content
-            "on_fail": "exception"
-        })
-    ],
-    "llm_validation": [
         (LlamaGuard7B, {
-            "policies": ["O1", "O2", "O3", "O4", "O5", "O6"],
+            "policies": ["O6"],
             "on_fail": "exception"
         })
     ],
@@ -24,7 +18,7 @@ GUARDRAIL_CONFIG = {
     # 🧨 2. Jailbreak Detection (FAST)
     "jailbreak": [
         (DetectJailbreak, {
-            "threshold": 0.6,
+            "threshold": 0.8,
             "on_fail": "exception"
         }),
         # (UnusualPrompt, {

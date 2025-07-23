@@ -561,7 +561,7 @@ async def startup_event():
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,
             "chats_by_session_id": {},
-            "input_guardrails": Guardrails().with_policy("performance_optimized"),
+            "input_guardrails": Guardrails().with_policy("maximum_protection"),
         }
         rag_app.initialize(**config)
 
