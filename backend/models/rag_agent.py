@@ -7,6 +7,7 @@ from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
+from utils.fallback_service import FallbackService
 from langchain_core.runnables import RunnableConfig
 class RAGAgent:
     """
@@ -20,6 +21,7 @@ class RAGAgent:
         self.llm_with_tools = self.llm.bind_tools(self.tools)
         self.input_guardrails: Optional[Guardrails] = kwargs.get("input_guardrails", None)
         self.output_guardrails: Optional[Guardrails] = kwargs.get("output_guardrails", None)
+        self.fallback_service = FallbackService()
         self.graph = self._build_graph()
         self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
     
@@ -37,13 +39,15 @@ class RAGAgent:
         
         workflow.add_node("agent", self._call_model)
         workflow.add_node("tools", ToolNode(self.tools))
+        workflow.add_node("fallback", self._handle_fallback)
         
         # Add edges
         workflow.add_edge(START, "input_guardrails")
         workflow.add_conditional_edges("input_guardrails", self._validate_input, {
             "validated": "agent",
-            "invalidated": END,
+            "invalidated": "fallback",
         })
+        workflow.add_edge("fallback", END)
         
         # workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
@@ -61,95 +65,107 @@ class RAGAgent:
         return graph
     
     def _input_guardrails(self, state: State, config: RunnableConfig):
-        """Input guardrails."""
+        """Input guardrails with fallback context capture."""
         if self.input_guardrails:
             try:
                 self.input_guardrails.validate(state["messages"][-1].content, strategy="solo", raise_on_fail=True)
             except ValidationException as e:
-                for name, result in e.results['solo_guards'].items():
-                    if not result.passed:
-                        print(f"{name} failed: {result.message}")
-                return {"messages": [SystemMessage(content="I'm sorry, I can't answer that question.")]}
+                # Store violation information in state for fallback node
+                primary_category, context = self.fallback_service.analyze_violation(e.results)
+                
+                return {
+                    "messages": state["messages"],
+                    "violation_category": primary_category,
+                    "violation_context": context,
+                    "validation_failed": True
+                }
         return state
         
     def _validate_input(self, state: State) -> Literal["validated", "invalidated"]:
-        messages = state["messages"]
-        last_message = messages[-1]
-        if isinstance(last_message, SystemMessage):
+        """Determine if input validation passed or failed."""
+        # Check if validation failed (set by _input_guardrails)
+        if state.get("validation_failed", False):
             return "invalidated"
         return "validated"
         
     def _output_guardrails(self, state: State, config: RunnableConfig):
         """Output guardrails."""
         return state
+        
+    def _handle_fallback(self, state: State, config: RunnableConfig):
+        """Handle fallback response when input validation fails."""
+        # Extract violation information from state
+        violation_category = state.get("violation_category", "default")
+        violation_context = state.get("violation_context", {})
+        
+        # Get appropriate fallback response
+        fallback_message = self.fallback_service.get_fallback_response(
+            category=violation_category,
+            context=violation_context
+        )
+        
+        # Return fallback message as final response
+        return {"messages": [AIMessage(content=fallback_message)]}
     # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
 
+        if "configurable" not in config or "session_id" not in config["configurable"]:
+            raise ValueError(
+                "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
+            )
+
+        session_id = config["configurable"]["session_id"]
+        
+        # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
+        recent_history = self._get_recent_clean_history(session_id, max_messages=6)
+        
         # 🎯 ADD SYSTEM PROMPT HERE
         system_prompt = SystemMessage(content="""
-You are a trauma-informed, empathetic mental health assistant designed to support military personnel and veterans.
+You are a trauma-informed, empathetic mental health assistant. Your role is to support **military personnel and veterans** with mental health concerns.
 
-RESPONSE FORMAT GUIDELINES:
-- Keep responses focused and concise (100-150 words maximum)
-- Avoid repetition - DON'T REPEAT THE SAME INFORMATION TWICE
-- Use proper markdown formatting for lists and structure
-- Use standard markdown bullet points with dashes: "- Item one"
-- Add blank lines between paragraphs for better readability
-- Start with the most important information first
+— DO NOT answer questions unrelated to mental health or military/veteran support.
+— If a question is out of scope, politely say you don’t know or cannot answer.
+— DO NOT provide legal, medical, or unrelated general advice.
 
-MARKDOWN FORMATTING RULES:
-- Use dashes for bullet points: "- Item one" not "• Item one" or "* Item"
-- Always add blank lines before and after lists
-- Format like this:
+RESPONSE RULES:
+- Keep all responses between **100–150 words**
+- Be clear, direct, and **avoid repetition**
+- Use **markdown formatting** as follows:
 
-Paragraph text here.
+  - Use dashes `-` for bullet points (not *, •, or numbered lists)
+  - Leave a **blank line before and after** each list
+  - Use short paragraphs for readability
 
-- First bullet point
-- Second bullet point  
-- Third bullet point
+CONTENT PRIORITY:
+- Begin with the most important or helpful point
+- If you’re unsure of something, say “I don’t know” — DO NOT guess or make up answers
+- Use respectful, **gender-neutral** language
+- NEVER probe for trauma details — only respond to what the user voluntarily shares
+- Validate emotional experiences with empathy
 
-Next paragraph here.
+INTERACTION PRINCIPLES:
+1. Always respond with empathy, care, and respect
+2. Use trauma-informed, military-relevant knowledge only
+3. Suggest simple grounding or mindfulness strategies when appropriate
+4. Refer to crisis or emergency services if user shows signs of severe distress or self-harm
+5. DO NOT replace therapy — your role is supportive, not clinical
 
-When interacting with users:
-1. Always prioritize empathy, active listening, and emotional validation.
-2. Use retrieved information from trusted trauma-informed and military-specific resources to guide your responses.
-3. If you do not have enough information or if a question is out of scope (e.g., medical diagnosis, legal advice), gently inform the user and encourage seeking professional help.
-4. Never speculate, fabricate information, or provide unsafe or triggering content.
-5. Always use gender-neutral, inclusive, and respectful language.
-6. Avoid re-traumatization: do not probe for explicit trauma details unless the user voluntarily offers them, and then respond with sensitivity.
-7. When appropriate, suggest mindfulness, grounding techniques, or trusted support resources.
-8. If signs of severe distress, self-harm, or crisis appear, follow escalation protocol and recommend contacting a qualified professional or emergency service.
-9. Be clear, compassionate, and concise. Always prioritize the user's emotional safety and privacy.
+TOOLS:
+- If additional information is needed, use retrieval silently — NEVER mention tool use or retrieval in your reply
+- Integrate retrieved content naturally and fully into the response
 
-IMPORTANT: 
-- When you need additional information, simply call the retrieve_information tool without mentioning that you're doing so
-- Do NOT say "Here is a function call" or mention function calls in your responses
-- Integrate retrieved information naturally into your response
-- If you need to search for resources, do so quietly and present the information as part of your natural response
-- Ensure each response is complete and non-repetitive
-
-You are here to support — not to replace professional therapy.
-        """)
-        if "configurable" not in config or "session_id" not in config["configurable"]:
-        #     raise ValueError(
-        #         "Make sure that the config includes the following information: {'configurable': {'session_id': 'some_value'}}"
-        # )
-            messages = [system_prompt] + state["messages"]
-            response = self.llm_with_tools.invoke(messages)
-        else:
-
-            session_id = config["configurable"]["session_id"]
-            # 🔧 GET CLEAN CHAT HISTORY (for personal context like names)
-            recent_history = self._get_recent_clean_history(session_id, max_messages=6)
-            
-            # Combine with current state (system prompt first)
-            messages = [system_prompt] + recent_history + state["messages"]
-            
-            response = self.llm_with_tools.invoke(messages)
-            
-            # Store clean exchange
-            self._store_clean_exchange(session_id, state["messages"], response)
+IMPORTANT:
+- Never fabricate, speculate, or provide triggering content
+- Focus only on emotional support and trauma-informed practices for military and veteran users""")
+        
+        # Combine with current state (system prompt first)
+        messages = [system_prompt] + recent_history + state["messages"]
+        
+        response = self.llm_with_tools.invoke(messages)
+        
+        # Store clean exchange
+        self._store_clean_exchange(session_id, state["messages"], response)
 
         return {"messages": [response]}
 
