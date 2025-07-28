@@ -150,6 +150,8 @@ def example_1_basic_evaluation():
                     print("💡 Tip: Use 'python preprocess_data.py' to clean data offline for better performance")
                 except Exception as e:
                     print(f"⚠️ Failed to load raw data: {e}")
+            else:
+                print("📁 No raw data found. Please run 'python scripts/data_collection/crawl_data.py' to collect data.")
     else:
         print("⏩ Auto-processing skipped. Use API endpoints to load data manually.")
 
