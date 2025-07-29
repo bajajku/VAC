@@ -598,7 +598,6 @@ async def startup_event():
             cleaned_data_dir = Path("scripts/data_cleaning/cleaned_data")
             # Filter out _info.json files - only get actual data files
             cleaned_files = [f for f in cleaned_data_dir.glob("*.json") if not f.name.endswith("_info.json")] if cleaned_data_dir.exists() else []
-            print(f"cleaned_files: {cleaned_files}")
             
             if cleaned_files:
                 print(f"📚 Found {len(cleaned_files)} preprocessed cleaned files. Loading...")
