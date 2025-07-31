@@ -17,7 +17,7 @@ from langchain_core.documents import Document
 
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
+from models.guardrails import Guardrails
 from core.app import get_app
 from models.rag_agent import create_rag_agent
 from models.evaluation_pipeline import create_evaluation_pipeline, TestCaseGenerator
@@ -78,7 +78,8 @@ def example_1_basic_evaluation():
         "persist_directory": "./chroma_db",
         "collection_name": "demo_collection",
         "api_key": TOGETHER_API_KEY,
-        "chats_by_session_id": {}
+        "chats_by_session_id": {},
+        "input_guardrails": Guardrails().with_policy("maximum_protection")
     }
     rag_app.initialize(**config)
 
@@ -97,10 +98,9 @@ def example_1_basic_evaluation():
         print("🔄 Auto-processing enabled. Checking for data files...")
         
         # Check for preprocessed cleaned data first
-        cleaned_data_dir = Path("scripts/data_cleaning/cleaned_data")
+        cleaned_data_dir = Path(os.path.join(os.path.dirname(__file__), "..", "scripts", "data_cleaning", "cleaned_data"))
         # Filter out _info.json files - only get actual data files
         cleaned_files = [f for f in cleaned_data_dir.glob("*.json") if not f.name.endswith("_info.json")] if cleaned_data_dir.exists() else []
-        print(f"cleaned_files: {cleaned_files}")
         if cleaned_files:
             print(f"📚 Found {len(cleaned_files)} preprocessed cleaned files. Loading...")
             latest_cleaned = max(cleaned_files, key=os.path.getctime)
