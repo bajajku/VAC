@@ -1,14 +1,14 @@
-from typing import Literal
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
-from langchain_core.tools import tool
+from typing import Literal, Optional
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from models.guardrails import Guardrails, ValidationException
 from models.state import State
 from models.llm import LLM
 from models.tools.retriever_tool import retrieve_information
 from utils.graph_image import GraphImage
+from utils.fallback_service import FallbackService
 from langchain_core.runnables import RunnableConfig
-from utils.helper import get_chat_history
 class RAGAgent:
     """
     A RAG (Retrieval-Augmented Generation) agent using langgraph.
@@ -19,6 +19,9 @@ class RAGAgent:
         self.llm = llm.create_chat()
         self.tools = [retrieve_information]
         self.llm_with_tools = self.llm.bind_tools(self.tools)
+        self.input_guardrails: Optional[Guardrails] = kwargs.get("input_guardrails", None)
+        self.output_guardrails: Optional[Guardrails] = kwargs.get("output_guardrails", None)
+        self.fallback_service = FallbackService()
         self.graph = self._build_graph()
         self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
     
@@ -29,11 +32,24 @@ class RAGAgent:
         workflow = StateGraph(State)
         
         # Add nodes
+        if self.input_guardrails:
+            workflow.add_node("input_guardrails", self._input_guardrails)
+        if self.output_guardrails:
+            workflow.add_node("output_guardrails", self._output_guardrails)
+        
         workflow.add_node("agent", self._call_model)
         workflow.add_node("tools", ToolNode(self.tools))
+        workflow.add_node("fallback", self._handle_fallback)
         
         # Add edges
-        workflow.add_edge(START, "agent")
+        workflow.add_edge(START, "input_guardrails")
+        workflow.add_conditional_edges("input_guardrails", self._validate_input, {
+            "validated": "agent",
+            "invalidated": "fallback",
+        })
+        workflow.add_edge("fallback", END)
+        
+        # workflow.add_edge(START, "agent")
         workflow.add_conditional_edges(
             "agent",
             self._should_continue,
@@ -48,6 +64,48 @@ class RAGAgent:
         GraphImage.create_graph_image(graph)
         return graph
     
+    def _input_guardrails(self, state: State, config: RunnableConfig):
+        """Input guardrails with fallback context capture."""
+        if self.input_guardrails:
+            try:
+                self.input_guardrails.validate(state["messages"][-1].content, strategy="solo", raise_on_fail=True)
+            except ValidationException as e:
+                # Store violation information in state for fallback node
+                primary_category, context = self.fallback_service.analyze_violation(e.results)
+                
+                return {
+                    "messages": state["messages"],
+                    "violation_category": primary_category,
+                    "violation_context": context,
+                    "validation_failed": True
+                }
+        return state
+        
+    def _validate_input(self, state: State) -> Literal["validated", "invalidated"]:
+        """Determine if input validation passed or failed."""
+        # Check if validation failed (set by _input_guardrails)
+        if state.get("validation_failed", False):
+            return "invalidated"
+        return "validated"
+        
+    def _output_guardrails(self, state: State, config: RunnableConfig):
+        """Output guardrails."""
+        return state
+        
+    def _handle_fallback(self, state: State, config: RunnableConfig):
+        """Handle fallback response when input validation fails."""
+        # Extract violation information from state
+        violation_category = state.get("violation_category", "default")
+        violation_context = state.get("violation_context", {})
+        
+        # Get appropriate fallback response
+        fallback_message = self.fallback_service.get_fallback_response(
+            category=violation_category,
+            context=violation_context
+        )
+        
+        # Return fallback message as final response
+        return {"messages": [AIMessage(content=fallback_message)]}
     # TODO: some issues with the chat history, saving too many messages, causing the chat history to be too large
     def _call_model(self, state: State, config: RunnableConfig):
         """Call the LLM with the current state."""
@@ -64,49 +122,42 @@ class RAGAgent:
         
         # 🎯 ADD SYSTEM PROMPT HERE
         system_prompt = SystemMessage(content="""
-You are a trauma-informed, empathetic mental health assistant designed to support military personnel and veterans.
+You are a trauma-informed, empathetic mental health assistant. Your role is to support **military personnel and veterans** with mental health concerns.
 
-RESPONSE FORMAT GUIDELINES:
-- Keep responses focused and concise (100-150 words maximum)
-- Avoid repetition - DON'T REPEAT THE SAME INFORMATION TWICE
-- Use proper markdown formatting for lists and structure
-- Use standard markdown bullet points with dashes: "- Item one"
-- Add blank lines between paragraphs for better readability
-- Start with the most important information first
+— DO NOT answer questions unrelated to mental health or military/veteran support.
+— If a question is out of scope, politely say you don’t know or cannot answer.
+— DO NOT provide legal, medical, or unrelated general advice.
 
-MARKDOWN FORMATTING RULES:
-- Use dashes for bullet points: "- Item one" not "• Item one" or "* Item"
-- Always add blank lines before and after lists
-- Format like this:
+RESPONSE RULES:
+- Keep all responses between **100–150 words**
+- Be clear, direct, and **avoid repetition**
+- Use **markdown formatting** as follows:
 
-Paragraph text here.
+  - Use dashes `-` for bullet points (not *, •, or numbered lists)
+  - Leave a **blank line before and after** each list
+  - Use short paragraphs for readability
 
-- First bullet point
-- Second bullet point  
-- Third bullet point
+CONTENT PRIORITY:
+- Begin with the most important or helpful point
+- If you’re unsure of something, say “I don’t know” — DO NOT guess or make up answers
+- Use respectful, **gender-neutral** language
+- NEVER probe for trauma details — only respond to what the user voluntarily shares
+- Validate emotional experiences with empathy
 
-Next paragraph here.
+INTERACTION PRINCIPLES:
+1. Always respond with empathy, care, and respect
+2. Use trauma-informed, military-relevant knowledge only
+3. Suggest simple grounding or mindfulness strategies when appropriate
+4. Refer to crisis or emergency services if user shows signs of severe distress or self-harm
+5. DO NOT replace therapy — your role is supportive, not clinical
 
-When interacting with users:
-1. Always prioritize empathy, active listening, and emotional validation.
-2. Use retrieved information from trusted trauma-informed and military-specific resources to guide your responses.
-3. If you do not have enough information or if a question is out of scope (e.g., medical diagnosis, legal advice), gently inform the user and encourage seeking professional help.
-4. Never speculate, fabricate information, or provide unsafe or triggering content.
-5. Always use gender-neutral, inclusive, and respectful language.
-6. Avoid re-traumatization: do not probe for explicit trauma details unless the user voluntarily offers them, and then respond with sensitivity.
-7. When appropriate, suggest mindfulness, grounding techniques, or trusted support resources.
-8. If signs of severe distress, self-harm, or crisis appear, follow escalation protocol and recommend contacting a qualified professional or emergency service.
-9. Be clear, compassionate, and concise. Always prioritize the user's emotional safety and privacy.
+TOOLS:
+- If additional information is needed, use retrieval silently — NEVER mention tool use or retrieval in your reply
+- Integrate retrieved content naturally and fully into the response
 
-IMPORTANT: 
-- When you need additional information, simply call the retrieve_information tool without mentioning that you're doing so
-- Do NOT say "Here is a function call" or mention function calls in your responses
-- Integrate retrieved information naturally into your response
-- If you need to search for resources, do so quietly and present the information as part of your natural response
-- Ensure each response is complete and non-repetitive
-
-You are here to support — not to replace professional therapy.
-        """)
+IMPORTANT:
+- Never fabricate, speculate, or provide triggering content
+- Focus only on emotional support and trauma-informed practices for military and veteran users""")
         
         # Combine with current state (system prompt first)
         messages = [system_prompt] + recent_history + state["messages"]
@@ -157,7 +208,7 @@ You are here to support — not to replace professional therapy.
         # Limit history size (keep last 8 messages = 4 exchanges)
         if len(chat_history.messages) > 8:
             chat_history.messages = chat_history.messages[-8:]
-    
+
     def _should_continue(self, state: State) -> Literal["continue", "end"]:
         """Determine whether to continue to tools or end the conversation."""
         messages = state["messages"]
@@ -169,7 +220,7 @@ You are here to support — not to replace professional therapy.
         # Otherwise, end
         return "end"
     
-    def invoke(self, user_input: str) -> str:
+    def invoke(self, user_input: str, config: RunnableConfig) -> str:
         """
         Process a user query through the RAG pipeline.
         
@@ -185,7 +236,7 @@ You are here to support — not to replace professional therapy.
         }
         
         # Run the graph
-        result = self.graph.invoke(initial_state)
+        result = self.graph.invoke(initial_state, config=config)
         
         # Extract the final AI message
         final_message = result["messages"][-1]
@@ -194,13 +245,13 @@ You are here to support — not to replace professional therapy.
         else:
             return "I apologize, but I couldn't generate a proper response."
     
-    async def ainvoke(self, user_input: str) -> str:
+    async def ainvoke(self, user_input: str, config: RunnableConfig) -> str:
         """Async version of invoke."""
         initial_state = {
             "messages": [HumanMessage(content=user_input)]
         }
         
-        result = await self.graph.ainvoke(initial_state)
+        result = await self.graph.ainvoke(initial_state, config=config)
         
         final_message = result["messages"][-1]
         if isinstance(final_message, AIMessage):
@@ -224,7 +275,6 @@ You are here to support — not to replace professional therapy.
 
             if isinstance(chunk, AIMessage):
                 if chunk.content:
-                    print(chunk.content)
                     yield chunk.content
 
     async def astream(self, user_input: str):
