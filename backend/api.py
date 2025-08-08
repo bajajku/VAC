@@ -96,6 +96,23 @@ class FeedbackRequest(BaseModel):
     feedback_text: Optional[str] = None
     rating: Optional[int] = None
     user_id: Optional[str] = None
+    
+    # Detailed feedback categories (1-5 star ratings)
+    retrieval_relevance: Optional[int] = None
+    hallucination: Optional[int] = None
+    noise_robustness: Optional[int] = None
+    negative_rejection: Optional[int] = None
+    privacy_breach: Optional[int] = None
+    malicious_use: Optional[int] = None
+    security_breach: Optional[int] = None
+    out_of_domain: Optional[int] = None
+    completeness: Optional[int] = None
+    brand_damage: Optional[int] = None
+    
+    # Additional feedback fields
+    vote: Optional[str] = None
+    comment: Optional[str] = None
+    expert_notes: Optional[str] = None
 
 class NewSessionRequest(BaseModel):
     user_id: Optional[str] = None
@@ -952,8 +969,9 @@ async def stream_query(
         except Exception as e:
             print(f"Warning: Could not store user message: {e}")
         
-        # Collect the full AI response
+        # Collect the full AI response and sources
         full_response = ""
+        collected_sources = []
         
         # Stream the response
         for chunk in rag_app.stream_query(request.question, session_id):
@@ -965,15 +983,18 @@ async def stream_query(
             if isinstance(chunk[0], ToolMessage):
                 sources = extract_sources_from_toolmessage(chunk[0].content)
                 for source in sources:
+                    if source and source not in collected_sources:
+                        collected_sources.append(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
-        # Store AI response
+        # Store AI response with sources
         try:
             if full_response.strip():
                 ai_message = ChatMessage(
                     content=full_response,
                     sender="assistant",
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.utcnow(),
+                    sources=collected_sources
                 )
                 await chat_session_service.add_message(session_id, ai_message)
         except Exception as e:
@@ -1099,7 +1120,24 @@ async def create_feedback(request: FeedbackRequest):
             feedback_type=request.feedback_type,
             feedback_text=request.feedback_text,
             rating=request.rating,
-            user_id=request.user_id
+            user_id=request.user_id,
+            
+            # Pass all detailed feedback fields from the request
+            retrieval_relevance=request.retrieval_relevance,
+            hallucination=request.hallucination,
+            noise_robustness=request.noise_robustness,
+            negative_rejection=request.negative_rejection,
+            privacy_breach=request.privacy_breach,
+            malicious_use=request.malicious_use,
+            security_breach=request.security_breach,
+            out_of_domain=request.out_of_domain,
+            completeness=request.completeness,
+            brand_damage=request.brand_damage,
+            
+            # Pass additional feedback fields
+            vote=request.vote,
+            comment=request.comment,
+            expert_notes=request.expert_notes
         )
         
         feedback = await feedback_service.create_feedback(feedback_data)

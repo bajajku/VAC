@@ -12,6 +12,7 @@ class ChatMessage(BaseModel):
     content: str = Field(..., description="Message content")
     sender: str = Field(..., description="Message sender: 'user' or 'assistant'")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    sources: Optional[List[str]] = Field(default_factory=list, description="List of source URLs/references for assistant messages")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
@@ -152,6 +153,7 @@ class ChatSessionService:
                     "content": doc.get("content", ""),
                     "sender": doc.get("sender", "user"),
                     "timestamp": doc.get("timestamp", datetime.utcnow()),
+                    "sources": doc.get("sources", []),
                     "metadata": doc.get("metadata", {})
                 }
                 messages.append(ChatMessage(**message_data))
@@ -276,6 +278,7 @@ class ChatSessionService:
                         "content": msg_doc.get("content", ""),
                         "sender": msg_doc.get("sender", "user"),
                         "timestamp": msg_doc.get("timestamp", datetime.utcnow()),
+                        "sources": msg_doc.get("sources", []),
                         "metadata": msg_doc.get("metadata", {})
                     }
                     preview_messages.append(ChatMessage(**message_data))

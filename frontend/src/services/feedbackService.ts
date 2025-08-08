@@ -10,6 +10,23 @@ type FeedbackCreate = {
   feedback_text?: string;
   rating?: number; // 1-5 scale
   user_id?: string;
+  
+  // Detailed feedback categories (1-5 star ratings)
+  retrieval_relevance?: number;
+  hallucination?: number;
+  noise_robustness?: number;
+  negative_rejection?: number;
+  privacy_breach?: number;
+  malicious_use?: number;
+  security_breach?: number;
+  out_of_domain?: number;
+  completeness?: number;
+  brand_damage?: number;
+  
+  // Additional feedback fields
+  vote?: string;
+  comment?: string;
+  expert_notes?: string;
 };
 
 type FeedbackResponse = {
@@ -21,6 +38,23 @@ type FeedbackResponse = {
   feedback_text?: string;
   rating?: number;
   user_id?: string;
+  
+  // Detailed feedback categories
+  retrieval_relevance?: number;
+  hallucination?: number;
+  noise_robustness?: number;
+  negative_rejection?: number;
+  privacy_breach?: number;
+  malicious_use?: number;
+  security_breach?: number;
+  out_of_domain?: number;
+  completeness?: number;
+  brand_damage?: number;
+  
+  vote?: string;
+  comment?: string;
+  expert_notes?: string;
+  
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -48,10 +82,22 @@ type LegacyFeedbackData = {
   accuracy?: number;
   helpfulness?: number;
   clarity?: number;
+  
+  // Detailed feedback categories (1-5 star ratings)
+  retrieval_relevance?: number;
+  hallucination?: number;
+  noise_robustness?: number;
+  negative_rejection?: number;
+  privacy_breach?: number;
+  malicious_use?: number;
+  security_breach?: number;
+  out_of_domain?: number;
+  completeness?: number;
+  brand_damage?: number;
+  
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
-  timestamp: Date;
   sessionId?: string;
 };
 
@@ -215,6 +261,23 @@ class FeedbackService {
         feedback_text: feedback.comment || feedback.expertNotes,
         // Only include rating if it's a valid rating (1-5), not 0 or undefined
         rating: feedback.overallRating && feedback.overallRating > 0 ? feedback.overallRating : undefined,
+        
+        // Map detailed categories from legacy feedback
+        retrieval_relevance: feedback.retrieval_relevance && feedback.retrieval_relevance > 0 ? feedback.retrieval_relevance : undefined,
+        hallucination: feedback.hallucination && feedback.hallucination > 0 ? feedback.hallucination : undefined,
+        noise_robustness: feedback.noise_robustness && feedback.noise_robustness > 0 ? feedback.noise_robustness : undefined,
+        negative_rejection: feedback.negative_rejection && feedback.negative_rejection > 0 ? feedback.negative_rejection : undefined,
+        privacy_breach: feedback.privacy_breach && feedback.privacy_breach > 0 ? feedback.privacy_breach : undefined,
+        malicious_use: feedback.malicious_use && feedback.malicious_use > 0 ? feedback.malicious_use : undefined,
+        security_breach: feedback.security_breach && feedback.security_breach > 0 ? feedback.security_breach : undefined,
+        out_of_domain: feedback.out_of_domain && feedback.out_of_domain > 0 ? feedback.out_of_domain : undefined,
+        completeness: feedback.completeness && feedback.completeness > 0 ? feedback.completeness : undefined,
+        brand_damage: feedback.brand_damage && feedback.brand_damage > 0 ? feedback.brand_damage : undefined,
+        
+        // Additional fields
+        vote: feedback.vote || undefined,
+        comment: feedback.comment || undefined,
+        expert_notes: feedback.expertNotes || undefined,
       };
 
       const result = await this.createFeedback(newFeedback);
@@ -245,13 +308,27 @@ class FeedbackService {
           },
           responseId: feedback.id,
           overallRating: feedback.rating && feedback.rating > 0 ? feedback.rating : undefined,
+          
+          // Map detailed categories from new format back to legacy format
+          retrieval_relevance: feedback.retrieval_relevance,
+          hallucination: feedback.hallucination,
+          noise_robustness: feedback.noise_robustness,
+          negative_rejection: feedback.negative_rejection,
+          privacy_breach: feedback.privacy_breach,
+          malicious_use: feedback.malicious_use,
+          security_breach: feedback.security_breach,
+          out_of_domain: feedback.out_of_domain,
+          completeness: feedback.completeness,
+          brand_damage: feedback.brand_damage,
+          
           accuracy: undefined, // Not available in new format
           helpfulness: undefined, // Not available in new format
           clarity: undefined, // Not available in new format
-          vote: feedback.feedback_type === 'positive' ? 'like' as const : 
-                feedback.feedback_type === 'negative' ? 'dislike' as const : null,
-          comment: feedback.feedback_text || '',
-          expertNotes: '',
+                     vote: (feedback.vote === 'like' || feedback.vote === 'dislike') ? feedback.vote : 
+                 (feedback.feedback_type === 'positive' ? 'like' as const : 
+                 feedback.feedback_type === 'negative' ? 'dislike' as const : null),
+          comment: feedback.comment || feedback.feedback_text || '',
+          expertNotes: feedback.expert_notes || '',
           timestamp: new Date(feedback.created_at),
           sessionId: feedback.session_id
         }));
