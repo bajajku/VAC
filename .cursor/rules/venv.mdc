@@ -1,0 +1,12 @@
+---
+description:
+globs: *.py
+alwaysApply: true
+---
+
+# Virtual Environment Guide
+
+- Before installing any new dependency in backend, make sure virtual environment is activated
+- Check if virtual environment by name .venv is present in VAC/backend
+- If present activate else create new.
+- Also before executing any new file make sure virtual environemnt is activated
