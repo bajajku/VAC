@@ -26,6 +26,7 @@ dependencies = [
     "pymongo>=4.13.0",
     "bitsandbytes>=0.46.0",
     "guardrails-ai>=0.5.15",
+    "langchain-ollama>=0.3.3",
 ]
 
 # Add this section to specify which directories are packages

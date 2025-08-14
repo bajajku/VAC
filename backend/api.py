@@ -576,8 +576,8 @@ async def startup_event():
         config = {
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-            "llm_provider": "chatopenai",
-            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "llm_provider": "ollama",
+            "llm_model": "llama3.1:8b",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,

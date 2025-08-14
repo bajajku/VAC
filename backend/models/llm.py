@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from langchain_openai import ChatOpenAI
 from langchain_huggingface import HuggingFacePipeline, HuggingFaceEndpoint
+from langchain_ollama.chat_models import ChatOllama
 import transformers
 from langchain.chat_models import init_chat_model
 import os
@@ -55,6 +56,17 @@ class OpenAILLM(BaseLLM):
             **{k: v for k, v in self.config.items() if k != 'model'}
         )
 
+class OllamaLLM(BaseLLM):
+    """Ollama implementation."""
+    
+    def __init__(self, model_name: str, **kwargs):
+        super().__init__(model_name, **kwargs)
+
+    def create_llm(self):
+        return ChatOllama(
+            model=self.model_name,
+            **{k: v for k, v in self.config.items() if k != 'model'}
+        )
 
 class HuggingFacePipelineLLM(BaseLLM):
     """HuggingFace Pipeline implementation."""
@@ -212,6 +224,7 @@ class LLMFactory:
         'huggingface_endpoint': HuggingFaceEndpointLLM,
         'mistralai': MistralAILLM,
         'chatopenai': ChatOpenAILLM,
+        'ollama': OllamaLLM,
     }
     
     @classmethod
