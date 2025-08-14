@@ -30,6 +30,7 @@ dependencies = [
     "bitsandbytes>=0.46.0",
     "guardrails-ai>=0.5.15",
 >>>>>>> 612c368 (added b and b)
+    "langchain-ollama>=0.3.3",
 ]
 
 # Add this section to specify which directories are packages
