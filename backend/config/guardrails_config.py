@@ -72,7 +72,7 @@ GUARDRAIL_POLICIES = {
     
     # Strict policy with all guardrails (maximum protection)
     "maximum_protection": [
-        "crisis_escalation",
+        # "crisis_escalation",
         "jailbreak", 
         "privacy",
         "profanity_hate_harassment",
