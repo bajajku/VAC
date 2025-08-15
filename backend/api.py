@@ -582,7 +582,7 @@ async def startup_event():
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
             "llm_provider": "ollama",
-            "llm_model": "llama3.1:8b",
+            "llm_model": "llama3.3:70b",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,
