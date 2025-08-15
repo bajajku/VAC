@@ -17,8 +17,12 @@ class RAGAgent:
     
     def __init__(self, llm: LLM, **kwargs):
         self.llm = llm.create_chat()
+        # Import the async tool for streaming optimization
+        from models.tools.retriever_tool import aretrieve_information
         self.tools = [retrieve_information]
+        self.async_tools = [aretrieve_information]  # Async tools for streaming
         self.llm_with_tools = self.llm.bind_tools(self.tools)
+        self.llm_with_async_tools = self.llm.bind_tools(self.async_tools)
         self.input_guardrails: Optional[Guardrails] = kwargs.get("input_guardrails", None)
         self.output_guardrails: Optional[Guardrails] = kwargs.get("output_guardrails", None)
         self.fallback_service = FallbackService()

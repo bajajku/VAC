@@ -40,6 +40,7 @@ from utils.auth_service import (
     hash_password, verify_password, create_access_token, decode_access_token,
     create_refresh_token, decode_refresh_token, blacklist_token, is_password_complex
 )
+from utils.performance_monitor import performance_monitor, track_performance
 from config.mongodb import mongodb_config
 from utils.rate_limiter import cleanup_rate_limiter
 import asyncio
@@ -541,6 +542,14 @@ async def startup_event():
         # Start background tasks
         asyncio.create_task(cleanup_rate_limiter())
         
+        # Start session cache cleanup task
+        async def periodic_cleanup():
+            while True:
+                await asyncio.sleep(300)  # Clean up every 5 minutes
+                await cleanup_session_cache()
+        
+        asyncio.create_task(periodic_cleanup())
+        
         # Initialize MongoDB connection
         print("🔌 Connecting to MongoDB...")
         mongodb_connected = await mongodb_config.connect()
@@ -932,73 +941,153 @@ async def get_or_create_default_session(user_email: str) -> str:
         print(f"Error in get_or_create_default_session: {e}")
         raise
 
+# Session cache to avoid repeated DB queries
+session_cache = {}
+cache_ttl = 300  # 5 minutes TTL
+
+async def cleanup_session_cache():
+    """Cleanup expired session cache entries."""
+    current_time = time.time()
+    expired_keys = []
+    
+    for key, (_, timestamp) in session_cache.items():
+        if current_time - timestamp > cache_ttl:
+            expired_keys.append(key)
+    
+    for key in expired_keys:
+        del session_cache[key]
+    
+    print(f"Cleaned up {len(expired_keys)} expired session cache entries")
+
+@track_performance("session_validation_time")
+async def validate_session_cached(session_id: str, user_email: str) -> bool:
+    """Validate session with caching to avoid repeated DB queries."""
+    cache_key = f"{session_id}:{user_email}"
+    current_time = time.time()
+    
+    # Check cache first
+    if cache_key in session_cache:
+        cached_data, timestamp = session_cache[cache_key]
+        if current_time - timestamp < cache_ttl:
+            return cached_data
+        else:
+            # Remove expired cache entry
+            del session_cache[cache_key]
+    
+    # Query database
+    try:
+        session = await chat_session_service.get_session(session_id)
+        is_valid = session and session.user_id == user_email
+        
+        # Cache the result
+        session_cache[cache_key] = (is_valid, current_time)
+        return is_valid
+    except Exception as e:
+        print(f"Session validation error: {e}")
+        return False
+
+@track_performance("db_operation_time")
+async def store_user_message_background(session_id: str, question: str):
+    """Store user message in background."""
+    try:
+        user_message = ChatMessage(
+            content=question,
+            sender="user",
+            timestamp=datetime.utcnow()
+        )
+        await chat_session_service.add_message(session_id, user_message)
+    except Exception as e:
+        print(f"Warning: Could not store user message: {e}")
+
+@track_performance("db_operation_time")
+async def store_ai_message_background(session_id: str, response: str, sources: List[str]):
+    """Store AI message in background."""
+    try:
+        if response.strip():
+            ai_message = ChatMessage(
+                content=response,
+                sender="assistant",
+                timestamp=datetime.utcnow(),
+                sources=sources
+            )
+            await chat_session_service.add_message(session_id, ai_message)
+    except Exception as e:
+        print(f"Warning: Could not store AI message: {e}")
+
 # Update the stream_query endpoint to use authentication
 @app_api.post("/stream_async")
 async def stream_query(
     request: QueryRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user)
 ):
-    """Stream the response to a query with user authentication."""
+    """Stream the response to a query with user authentication and optimized performance."""
+    init_start_time = time.time()
+    
     if not is_initialized:
         raise HTTPException(status_code=503, detail="RAG system not initialized")
     
-    # Get or create session
+    # Fast session handling
     session_id = request.session_id
     if not session_id:
         session_id = await get_or_create_default_session(current_user.email)
     else:
-        # Verify session ownership
-        session = await chat_session_service.get_session(session_id)
-        if not session:
+        # Use cached session validation
+        is_valid = await validate_session_cached(session_id, current_user.email)
+        if not is_valid:
             session_id = await get_or_create_default_session(current_user.email)
-        elif session.user_id != current_user.email:
-            raise HTTPException(status_code=403, detail="Not authorized to access this session")
+    
+    # Record stream initialization time
+    init_time = time.time() - init_start_time
+    performance_monitor.record_metric("stream_init_time", init_time)
     
     async def event_stream():
+        stream_start_time = time.time()
+        first_chunk_sent = False
+        
         # Send session_id first
         yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
         
-        # Store user message
-        try:
-            user_message = ChatMessage(
-                content=request.question,
-                sender="user",
-                timestamp=datetime.utcnow()
-            )
-            await chat_session_service.add_message(session_id, user_message)
-        except Exception as e:
-            print(f"Warning: Could not store user message: {e}")
+        # Store user message in background (non-blocking)
+        background_tasks.add_task(store_user_message_background, session_id, request.question)
         
         # Collect the full AI response and sources
         full_response = ""
         collected_sources = []
         
-        # Stream the response
+        # Start retrieval timing
+        performance_monitor.start_timer("retrieval_time")
+        
+        # Stream the response with optimized configuration
         for chunk in rag_app.stream_query(request.question, session_id):
             if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
                 content = chunk[0].content
                 full_response += content
+                
+                # Track first chunk time
+                if not first_chunk_sent:
+                    first_chunk_time = time.time() - stream_start_time
+                    performance_monitor.record_metric("first_chunk_time", first_chunk_time)
+                    first_chunk_sent = True
+                
                 yield f"data: {content}\n\n"
             
             if isinstance(chunk[0], ToolMessage):
+                # End retrieval timing when we get tool results
+                performance_monitor.end_timer("retrieval_time")
+                
                 sources = extract_sources_from_toolmessage(chunk[0].content)
                 for source in sources:
                     if source and source not in collected_sources:
                         collected_sources.append(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
-        # Store AI response with sources
-        try:
-            if full_response.strip():
-                ai_message = ChatMessage(
-                    content=full_response,
-                    sender="assistant",
-                    timestamp=datetime.utcnow(),
-                    sources=collected_sources
-                )
-                await chat_session_service.add_message(session_id, ai_message)
-        except Exception as e:
-            print(f"Warning: Could not store AI message: {e}")
+        # Record total streaming time
+        total_time = time.time() - stream_start_time
+        performance_monitor.record_metric("total_stream_time", total_time)
+        
+        # Store AI response in background (non-blocking)
+        background_tasks.add_task(store_ai_message_background, session_id, full_response, collected_sources)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -1207,6 +1296,24 @@ async def get_feedback_stats(limit: int = 10):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving feedback stats: {str(e)}")
+
+@app_api.get("/performance-stats")
+async def get_performance_stats():
+    """Get performance statistics for streaming optimizations."""
+    try:
+        stats = performance_monitor.get_all_stats()
+        summary = performance_monitor.get_performance_summary()
+        
+        return {
+            "detailed_stats": stats,
+            "summary": summary,
+            "cache_stats": {
+                "session_cache_size": len(session_cache),
+                "cache_ttl_seconds": cache_ttl
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving performance stats: {str(e)}")
 
 # =============================================================================
 # CHAT SESSION ENDPOINTS
