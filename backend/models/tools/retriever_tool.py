@@ -1,13 +1,14 @@
 from typing import Dict, List, Optional
 from langchain_core.tools import tool
 from utils.retriever import global_retriever
+import asyncio
 
 @tool
 def retrieve_information(query: str, max_results: int = 5, 
-                        retrieval_strategy: str = "hybrid",
-                        use_reranking: bool = True) -> str:
+                        retrieval_strategy: str = "similarity",
+                        use_reranking: bool = False) -> str:
     """
-    Search the knowledge base for information related to the query using advanced retrieval techniques.
+    Search the knowledge base for information related to the query using optimized retrieval techniques.
     
     Args:
         query: The question or search term about the knowledge base.
@@ -22,8 +23,8 @@ def retrieve_information(query: str, max_results: int = 5,
         return "The knowledge base is not initialized. Please initialize the vector database first."
     
     try:
-        # Update retriever configuration for this query
-        if hasattr(global_retriever._retriever, 'update_config'):
+        # Update retriever configuration for this query (skip for streaming performance)
+        if hasattr(global_retriever._retriever, 'update_config') and use_reranking:
             global_retriever._retriever.update_config(
                 max_results=max_results,
                 retrieval_strategy=retrieval_strategy,
@@ -36,10 +37,10 @@ def retrieve_information(query: str, max_results: int = 5,
         if not docs:
             return "I couldn't find specific information about that in the knowledge base."
         
-        # Process and format the results with better content handling
+        # Process and format the results with optimized content handling for streaming
         formatted_results = []
         total_chars = 0
-        max_total_chars = 2000  # Increased from 200 to 2000 for better context
+        max_total_chars = 800  # Reduced from 2000 to 800 for faster streaming
         
         for i, doc in enumerate(docs, 1):
             content = doc.page_content.strip()
@@ -191,3 +192,91 @@ The retriever has been configured with these settings for improved performance."
     
     except Exception as e:
         return f"Error configuring retriever: {str(e)}"
+
+@tool
+async def aretrieve_information(query: str, max_results: int = 5, 
+                               retrieval_strategy: str = "similarity",
+                               use_reranking: bool = False) -> str:
+    """
+    Async search the knowledge base for information related to the query using optimized retrieval techniques.
+    
+    Args:
+        query: The question or search term about the knowledge base.
+        max_results: Maximum number of documents to retrieve (default: 5).
+        retrieval_strategy: Retrieval strategy to use ('similarity', 'mmr', 'hybrid', 'ensemble').
+        use_reranking: Whether to enable advanced re-ranking of results.
+        
+    Returns:
+        str: Relevant information from the knowledge base with enhanced processing.
+    """
+    if not global_retriever.is_initialized():
+        return "The knowledge base is not initialized. Please initialize the vector database first."
+    
+    try:
+        # Skip configuration updates for streaming performance
+        if hasattr(global_retriever._retriever, 'update_config') and use_reranking:
+            global_retriever._retriever.update_config(
+                max_results=max_results,
+                retrieval_strategy=retrieval_strategy,
+                enable_reranking=use_reranking
+            )
+        
+        # Get relevant documents using async retrieval
+        docs = await global_retriever.aget_relevant_documents(query, k=max_results)
+        
+        if not docs:
+            return "I couldn't find specific information about that in the knowledge base."
+        
+        # Process and format the results with optimized content handling for streaming
+        formatted_results = []
+        total_chars = 0
+        max_total_chars = 600  # Even more aggressive for async streaming
+        
+        for i, doc in enumerate(docs, 1):
+            content = doc.page_content.strip()
+            metadata = doc.metadata
+            
+            # Enhanced content processing
+            if not content:
+                continue
+            
+            # Truncate very long content to prevent overwhelming context
+            if len(content) > 300:
+                content = content[:300] + "..."
+            
+            # Check total character limit
+            if total_chars + len(content) > max_total_chars:
+                formatted_results.append(f"... and {len(docs) - i + 1} more relevant sources found.")
+                break
+            
+            # Format with metadata if available
+            source_info = ""
+            if metadata:
+                title = metadata.get('title', metadata.get('source', ''))
+                if title:
+                    source_info = f" (Source: {title})"
+            
+            formatted_result = f"**Result {i}**{source_info}:\n{content}"
+            formatted_results.append(formatted_result)
+            total_chars += len(formatted_result)
+            
+            # Break if we have enough content
+            if total_chars >= max_total_chars:
+                formatted_results.append(f"... and {len(docs) - i} more relevant sources found.")
+                break
+        
+        # Combine all results
+        if formatted_results:
+            result = "Relevant information found:\n\n" + "\n\n".join(formatted_results)
+            
+            # Add summary statistics
+            result += f"\n\n📊 Retrieved {len(docs)} documents"
+            if hasattr(global_retriever._retriever, 'retrieval_strategy'):
+                result += f" using {global_retriever._retriever.retrieval_strategy} strategy"
+            
+            return result
+        else:
+            return "Found relevant documents but couldn't format them properly. Please try with a more specific query."
+    
+    except Exception as e:
+        return f"Error during retrieval: {str(e)}. Please try again or contact support."

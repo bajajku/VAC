@@ -166,7 +166,7 @@ class RAGApplication:
         return await self.rag_application.ainvoke(question, config=config)
     
     def stream_query(self, question: str, session_id: str = None):
-        """Stream the response to a query with session support."""
+        """Stream the response to a query with session support and optimized configuration."""
         if not self.is_initialized:
             raise ValueError("Application not initialized. Call initialize() first.")
         
@@ -175,13 +175,19 @@ class RAGApplication:
             import uuid
             session_id = str(uuid.uuid4())
         
-        # Create config with session_id
-        config = {"configurable": {"session_id": session_id}}
+        # Create lightweight config with session_id for streaming
+        config = {
+            "configurable": {
+                "session_id": session_id,
+                "streaming_mode": True,  # Signal for optimized streaming
+                "skip_expensive_operations": True  # Skip non-essential operations
+            }
+        }
         
         # Create initial state
         initial_state = {"messages": [HumanMessage(content=question)]}
         
-        # Stream with session config
+        # Stream with optimized session config
         return self.rag_application.graph.stream(initial_state, config=config, stream_mode="messages")
     
     async def astream_query(self, question: str):
