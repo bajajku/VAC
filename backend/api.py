@@ -481,8 +481,7 @@ async def google_callback(code: str, state: str):
                 "token_type": "bearer"
             })
             
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(url=redirect_url)
+            return {"redirect_url": redirect_url}
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process Google callback: {str(e)}")
