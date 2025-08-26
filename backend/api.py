@@ -481,7 +481,8 @@ async def google_callback(code: str, state: str):
                 "token_type": "bearer"
             })
             
-            return {"redirect_url": redirect_url}
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url=redirect_url)
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process Google callback: {str(e)}")
@@ -573,7 +574,7 @@ async def startup_event():
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
             "llm_provider": "ollama",
-            "llm_model": "llama3.1:8b",
+            "llm_model": "llama3.1:70b",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,
