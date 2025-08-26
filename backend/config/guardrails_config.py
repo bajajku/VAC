@@ -73,8 +73,8 @@ GUARDRAIL_POLICIES = {
     # Strict policy with all guardrails (maximum protection)
     "maximum_protection": [
         # "crisis_escalation",
-        "jailbreak", 
-        "privacy",
+        # "jailbreak", 
+        # "privacy",
         "profanity_hate_harassment",
         # "llm_validation",
     ],

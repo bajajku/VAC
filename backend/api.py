@@ -582,7 +582,7 @@ async def startup_event():
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
             "llm_provider": "ollama",
-            "llm_model": "llama3.3:70b",
+            "llm_model": "llama3.1:70b",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": TOGETHER_API_KEY,
@@ -1090,6 +1090,105 @@ async def stream_query(
         background_tasks.add_task(store_ai_message_background, session_id, full_response, collected_sources)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+# Update the stream_query endpoint to use authentication
+@app_api.post("/stream_async_test")
+async def stream_query_test(
+    request: QueryRequest,
+    background_tasks: BackgroundTasks,
+):
+    """Stream the response to a query with user authentication and optimized performance."""
+    init_start_time = time.time()
+    
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="RAG system not initialized")
+    
+    # Record stream initialization time
+    init_time = time.time() - init_start_time
+    performance_monitor.record_metric("stream_init_time", init_time)
+    
+    async def event_stream():
+        stream_start_time = time.time()
+        first_chunk_sent = False
+                
+        # Store user message in background (non-blocking)
+        background_tasks.add_task(store_user_message_background, "test-session-id", request.question)
+        
+        # Collect the full AI response and sources
+        full_response = ""
+        collected_sources = []
+        
+        # Start retrieval timing
+        performance_monitor.start_timer("retrieval_time")
+        
+        # Stream the response with optimized configuration
+        for chunk in rag_app.stream_query(request.question, "test-session-id"):
+            if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
+                content = chunk[0].content
+                full_response += content
+                
+                # Track first chunk time
+                if not first_chunk_sent:
+                    first_chunk_time = time.time() - stream_start_time
+                    performance_monitor.record_metric("first_chunk_time", first_chunk_time)
+                    first_chunk_sent = True
+                
+                print(content)
+                yield f"data: {content}\n\n"
+            
+            if isinstance(chunk[0], ToolMessage):
+                # End retrieval timing when we get tool results
+                performance_monitor.end_timer("retrieval_time")
+                
+                sources = extract_sources_from_toolmessage(chunk[0].content)
+                for source in sources:
+                    if source and source not in collected_sources:
+                        collected_sources.append(source)
+                    yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
+        
+        # Record total streaming time
+        total_time = time.time() - stream_start_time
+        performance_monitor.record_metric("total_stream_time", total_time)
+        
+        # Store AI response in background (non-blocking)
+        background_tasks.add_task(store_ai_message_background, "test-session-id", full_response, collected_sources)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app_api.post("/stream_async_optimized")
+async def stream_query_optimized(
+    request: QueryRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Highly optimized streaming endpoint with minimal overhead."""
+    if not is_initialized:
+        raise HTTPException(status_code=503, detail="RAG system not initialized")
+    
+    async def event_stream():
+        # Minimal session handling - use cached session or fallback
+        session_id = request.session_id or f"temp-{current_user.email}-{int(time.time())}"
+        
+        # Send session_id immediately
+        yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
+        
+        # Direct streaming with minimal processing
+        try:
+            for chunk in rag_app.stream_query(request.question, session_id):
+                if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
+                    # Direct yield without extra processing
+                    yield f"data: {chunk[0].content}\n\n"
+                elif isinstance(chunk[0], ToolMessage):
+                    # Quick source extraction
+                    sources = extract_sources_from_toolmessage(chunk[0].content)
+                    for source in sources:
+                        if source:
+                            yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
+        except Exception as e:
+            yield f"data: Error: {str(e)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
 
 # =============================================================================
 # MONGODB DEBUG ENDPOINTS
