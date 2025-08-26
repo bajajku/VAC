@@ -273,6 +273,7 @@ const ChatPage = () => {
             break; // Exit the loop
           }
   
+          
           const chunk = decoder.decode(value, { stream: true });
           // Remove "data: " prefix
           let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
