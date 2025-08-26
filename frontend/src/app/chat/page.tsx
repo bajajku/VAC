@@ -213,41 +213,45 @@ const ChatPage = () => {
           router.push('/auth/login');
           return;
         }
-  
-        // Try to decode the token to check expiration
-        const tokenParts = token.split('.');
-        if (tokenParts.length === 3) {
-          const payload = JSON.parse(atob(tokenParts[1]));
-          const expiresAt = payload.exp * 1000; // Convert to milliseconds
-          const now = Date.now();
-          const fiveMinutes = 5 * 60 * 1000;
 
-          // If token expires in less than 5 minutes, refresh it
-          if (expiresAt - now < fiveMinutes) {
-            const refreshToken = Cookies.get('refresh_token');
-            if (refreshToken) {
-              const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'ngrok-skip-browser-warning': 'true'
-                },
-                body: JSON.stringify({ refresh_token: refreshToken })
-              });
+        // Lightweight token check - only validate if token is obviously expired
+        try {
+          const tokenParts = token.split('.');
+          if (tokenParts.length === 3) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            const expiresAt = payload.exp * 1000;
+            const now = Date.now();
+            
+            // Only refresh if token expires in less than 1 minute (reduced from 5 minutes)
+            if (expiresAt <= now + 60000) {
+              const refreshToken = Cookies.get('refresh_token');
+              if (refreshToken) {
+                const refreshResponse = await fetch(`${BASE_URL}/auth/refresh`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                  },
+                  body: JSON.stringify({ refresh_token: refreshToken })
+                });
 
-              if (refreshResponse.ok) {
-                const data = await refreshResponse.json();
-                Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
-                Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
-              } else {
-                router.push('/auth/login');
-                return;
+                if (refreshResponse.ok) {
+                  const data = await refreshResponse.json();
+                  Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
+                  Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
+                } else {
+                  router.push('/auth/login');
+                  return;
+                }
               }
             }
           }
+        } catch (tokenError) {
+          console.warn('Token validation error:', tokenError);
+          // Continue with existing token if parsing fails
         }
 
-        const response = await fetch(`${BASE_URL}/stream_async`, {
+        const response = await fetch(`${BASE_URL}/stream_async_optimized`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -270,6 +274,10 @@ const ChatPage = () => {
         const collectedSources: string[] = [];
         let botMessageId: number | null = null;
   
+        // Optimized variables for better performance
+        let chunkCounter = 0;
+        const updateInterval = 3; // Update UI every 3 chunks instead of every chunk
+        
         while (true) {
           const { value, done } = await reader.read();
           if (done) {
@@ -291,25 +299,27 @@ const ChatPage = () => {
                 )
               );
             }
-            break; // Exit the loop
+            break;
           }
   
           
           const chunk = decoder.decode(value, { stream: true });
-          // Remove "data: " prefix
+          
+          // Fast path: Skip processing if no special markers
+          const hasMarkers = chunk.includes('[SESSION_ID]') || chunk.includes('[SOURCE]');
           let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
-      
-          // Extract and remove session_id BEFORE processing other content
-          if (cleanChunk.includes('[SESSION_ID]')) {
-            const sessionMatch = cleanChunk.match(/\[SESSION_ID\](.*?)\[\/SESSION_ID\]/);
-            if (sessionMatch && !sessionId) {
-              const newSessionId = sessionMatch[1];
-              setSessionId(newSessionId);
-              localStorage.setItem('chatSessionId', newSessionId);
+          
+          if (hasMarkers) {
+            // Extract and remove session_id BEFORE processing other content
+            if (cleanChunk.includes('[SESSION_ID]')) {
+              const sessionMatch = cleanChunk.match(/\[SESSION_ID\](.*?)\[\/SESSION_ID\]/);
+              if (sessionMatch && !sessionId) {
+                const newSessionId = sessionMatch[1];
+                setSessionId(newSessionId);
+                localStorage.setItem('chatSessionId', newSessionId);
+              }
+              cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
             }
-            // Remove session ID from the chunk so it doesn't appear in chat
-            cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
-          }
 
           // Extract sources from the chunk and collect them (don't display yet)
           if (cleanChunk.includes('[SOURCE]')) {
@@ -335,7 +345,7 @@ const ChatPage = () => {
             cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
           }
       
-          // Only add to fullText if there's actual content after removing markers
+          // Add content to fullText
           if (cleanChunk.trim()) {
             fullText += cleanChunk;
           }
