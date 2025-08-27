@@ -260,20 +260,18 @@ const ChatPage = () => {
             if (sessionManagerRef.current) {
               sessionManagerRef.current.refreshSessions();
             }
-            // Final update with sources
+            // Final update - ensure everything is in sync
             console.log('🔍 Final update - Collected sources:', collectedSources);
             console.log('🔍 Final update - Bot message ID:', botMessageId);
-            if (collectedSources.length > 0 && botMessageId) {
-              console.log('🎯 Updating message with sources!');
+            if (botMessageId) {
+              console.log('🎯 Final sync of message with sources!');
               setMessages(prev =>
                 prev.map(msg =>
                   msg.id === botMessageId
-                    ? { ...msg, text: fullText, sources: collectedSources }
+                    ? { ...msg, text: fullText, sources: [...collectedSources] }
                     : msg
                 )
               );
-            } else {
-              console.log('❌ Not updating with sources - missing sources or botMessageId');
             }
             break; // Exit the loop
           }
@@ -324,23 +322,27 @@ const ChatPage = () => {
             fullText += cleanChunk;
           }
 
-          // Update UI progressively with text content only
-          setMessages(prev => {
-            const last = prev[prev.length - 1];
-            if (last && last.sender === 'bot' && last.id === botMessageId) {
-              return [...prev.slice(0, -1), { ...last, text: fullText }];
-            } else if (!botMessageId && fullText) {
-              const newBotMessage: Message = {
-                id: Date.now() + 1,
-                text: fullText,
-                sender: 'bot',
-                timestamp: new Date(),
-              };
-              botMessageId = newBotMessage.id;
-              return [...prev, newBotMessage];
-            }
-            return prev;
-          });
+          // Ensure we have a bot message created as soon as we get any content
+          if (!botMessageId && (fullText || collectedSources.length > 0)) {
+            const newBotMessage: Message = {
+              id: Date.now() + 1,
+              text: fullText,
+              sender: 'bot',
+              timestamp: new Date(),
+              sources: [...collectedSources]
+            };
+            botMessageId = newBotMessage.id;
+            setMessages(prev => [...prev, newBotMessage]);
+          } else if (botMessageId) {
+            // Update existing bot message with current text and sources
+            setMessages(prev =>
+              prev.map(msg =>
+                msg.id === botMessageId
+                  ? { ...msg, text: fullText, sources: [...collectedSources] }
+                  : msg
+              )
+            );
+          }
         }
   
       } catch (error) {
