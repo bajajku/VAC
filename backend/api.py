@@ -1102,6 +1102,7 @@ async def stream_query(
                 for source in sources:
                     if source and source not in collected_sources:
                         collected_sources.append(source)
+                    print(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
 <<<<<<< HEAD
