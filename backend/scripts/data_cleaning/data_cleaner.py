@@ -71,8 +71,8 @@ Please return only the cleaned, relevant content. If the document contains no us
                 raise ValueError("TOGETHER_API_KEY environment variable not set. Please set it to use the data cleaner.")
             
             llm = LLM(
-                provider="chatopenai", 
-                model_name="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+                provider="ollama", 
+                model_name="llama3.1:70b",
                 api_key=api_key
             )
             self.chain = NormalChain(llm=llm, prompt=self.data_cleaning_prompt)
