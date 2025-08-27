@@ -261,7 +261,10 @@ const ChatPage = () => {
               sessionManagerRef.current.refreshSessions();
             }
             // Final update with sources
+            console.log('🔍 Final update - Collected sources:', collectedSources);
+            console.log('🔍 Final update - Bot message ID:', botMessageId);
             if (collectedSources.length > 0 && botMessageId) {
+              console.log('🎯 Updating message with sources!');
               setMessages(prev =>
                 prev.map(msg =>
                   msg.id === botMessageId
@@ -269,6 +272,8 @@ const ChatPage = () => {
                     : msg
                 )
               );
+            } else {
+              console.log('❌ Not updating with sources - missing sources or botMessageId');
             }
             break; // Exit the loop
           }
@@ -292,7 +297,9 @@ const ChatPage = () => {
 
           // Extract sources from the chunk and collect them (don't display yet)
           if (cleanChunk.includes('[SOURCE]')) {
+            console.log('🔍 Found [SOURCE] in chunk:', cleanChunk);
             const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
+            console.log('🔍 Source matches:', sourceMatches);
             if (sourceMatches) {
               sourceMatches.forEach(match => {
                 const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '').trim();
@@ -303,6 +310,8 @@ const ChatPage = () => {
                 );
                 if (sourceContent && !isDuplicate) {
                   collectedSources.push(sourceContent);
+                  console.log('✅ Added source:', sourceContent);
+                  console.log('📝 Total collected sources:', collectedSources.length);
                 }
               });
             }
