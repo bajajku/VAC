@@ -611,40 +611,45 @@ async def startup_event():
             cleaned_files = [f for f in cleaned_data_dir.glob("*.json") if not f.name.endswith("_info.json")] if cleaned_data_dir.exists() else []
             
             if cleaned_files:
-                print(f"📚 Found {len(cleaned_files)} preprocessed cleaned files. Loading...")
-                latest_cleaned = max(cleaned_files, key=os.path.getctime)
-                print(f"📁 Loading preprocessed data from: {latest_cleaned}")
-                try:
-                    # Load preprocessed cleaned data directly
-                    import json
-                    with open(latest_cleaned, 'r') as f:
-                        cleaned_data = json.load(f)
-                    
-                    # Validate the data structure
-                    if not isinstance(cleaned_data, list):
-                        raise ValueError(f"Expected list of documents, got {type(cleaned_data)}")
-                    
-                    if not cleaned_data:
-                        raise ValueError("No documents found in preprocessed file")
-                    
-                    # Verify first item has expected structure
-                    if not isinstance(cleaned_data[0], dict) or 'page_content' not in cleaned_data[0]:
-                        raise ValueError("Invalid document structure in preprocessed file")
-                    
-                    # Convert to documents and add to vector DB
-                    documents = []
-                    for item in cleaned_data:
-                        doc = Document(
-                            page_content=item['page_content'],
-                            metadata=item['metadata']
-                        )
-                        documents.append(doc)
-                    
-                    rag_app.vector_db.add_documents(documents)
-                    print(f"✅ Loaded {len(documents)} preprocessed document chunks")
-                except Exception as e:
-                    print(f"⚠️ Failed to load preprocessed data from {latest_cleaned}: {e}")
-                    print(f"🔍 Debug info: File exists={latest_cleaned.exists()}, Size={latest_cleaned.stat().st_size if latest_cleaned.exists() else 'N/A'}")
+                print(f"📚 Found {len(cleaned_files)} preprocessed cleaned files. Loading all files...")
+                total_documents = 0
+                
+                for cleaned_file in cleaned_files:
+                    print(f"📁 Loading preprocessed data from: {cleaned_file}")
+                    try:
+                        # Load preprocessed cleaned data directly
+                        import json
+                        with open(cleaned_file, 'r') as f:
+                            cleaned_data = json.load(f)
+                        
+                        # Validate the data structure
+                        if not isinstance(cleaned_data, list):
+                            raise ValueError(f"Expected list of documents, got {type(cleaned_data)}")
+                        
+                        if not cleaned_data:
+                            raise ValueError("No documents found in preprocessed file")
+                        
+                        # Verify first item has expected structure
+                        if not isinstance(cleaned_data[0], dict) or 'page_content' not in cleaned_data[0]:
+                            raise ValueError("Invalid document structure in preprocessed file")
+                        
+                        # Convert to documents and add to vector DB
+                        documents = []
+                        for item in cleaned_data:
+                            doc = Document(
+                                page_content=item['page_content'],
+                                metadata=item['metadata']
+                            )
+                            documents.append(doc)
+                        
+                        rag_app.vector_db.add_documents(documents)
+                        total_documents += len(documents)
+                        print(f"✅ Loaded {len(documents)} preprocessed document chunks from {cleaned_file}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to load preprocessed data from {cleaned_file}: {e}")
+                        print(f"🔍 Debug info: File exists={cleaned_file.exists()}, Size={cleaned_file.stat().st_size if cleaned_file.exists() else 'N/A'}")
+                
+                print(f"📊 Total documents loaded from all files: {total_documents}")
             else:
                 # Fallback to raw data processing (only if no cleaned data available)
                 print("📁 No preprocessed data found. Checking for raw data...")
