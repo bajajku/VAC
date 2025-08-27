@@ -25,6 +25,7 @@ dependencies = [
     "motor>=3.7.1",
     "pymongo>=4.13.0",
     "langchain-ollama>=0.3.3",
+    "pypdf2>=3.0.1",
 ]
 
 # Add this section to specify which directories are packages
