@@ -1177,7 +1177,6 @@ async def stream_query_optimized(
             for chunk in rag_app.stream_query(request.question, session_id):
                 if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
                     # Direct yield without extra processing
-                    print(chunk[0].content)
                     yield f"data: {chunk[0].content}\n\n"
                 elif isinstance(chunk[0], ToolMessage):
                     # Quick source extraction
