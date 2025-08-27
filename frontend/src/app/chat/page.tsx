@@ -229,7 +229,7 @@ const ChatPage = () => {
           }
         }
 
-        const response = await fetch(`${BASE_URL}/stream_async_optimized`, {
+        const response = await fetch(`${BASE_URL}/stream_async`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
