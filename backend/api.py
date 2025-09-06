@@ -139,6 +139,12 @@ app_api.add_middleware(
     allow_headers=["*"],
 )
 
+LANGSMITH_TRACING="true"
+LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+LANGSMITH_API_KEY="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"
+LANGSMITH_PROJECT="VAC_LangSmith"
+
+
 # Global variables
 rag_app = None
 is_initialized = False
