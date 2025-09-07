@@ -584,14 +584,15 @@ async def startup_event():
 
         rag_app = get_app()
         
+
         config = {
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-            "llm_provider": "ollama",
-            "llm_model": "llama3.1:70b",
+            "llm_provider": "chatopenai",
+            "llm_model": "Qwen/Qwen2.5-7B-Instruct",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
-            "api_key": TOGETHER_API_KEY,
+            "api_key": "token-abc123",
             "chats_by_session_id": {},
             "input_guardrails": Guardrails().with_policy("maximum_protection"),
         }

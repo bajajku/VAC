@@ -189,7 +189,7 @@ class ChatOpenAILLM(BaseLLM):
 
     def create_llm(self):
         return ChatOpenAI(
-            base_url=self.config['base_url'] if 'base_url' in self.config else "https://api.together.xyz/v1",
+            base_url=self.config['base_url'] if 'base_url' in self.config else "http://cmi-dgx-station-5.tail69783d.ts.net:8081/v1",
             model=self.model_name,
             api_key=self.api_key,
             **{k: v for k, v in self.config.items() if k != 'model'}
