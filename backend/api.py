@@ -1136,7 +1136,7 @@ async def stream_query(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 # Update the stream_query endpoint to use authentication
-@app_api.post("/stream_async_test")
+@app_api.post("/    ")
 async def stream_query_test(
     request: QueryRequest,
     background_tasks: BackgroundTasks,
