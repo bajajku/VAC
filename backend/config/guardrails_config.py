@@ -75,7 +75,7 @@ GUARDRAIL_POLICIES = {
         # "crisis_escalation",
         # "jailbreak", 
         # "privacy",
-        "profanity_hate_harassment",
+        # "profanity_hate_harassment",
         # "llm_validation",
     ],
     
