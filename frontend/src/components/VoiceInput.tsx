@@ -16,14 +16,18 @@ const VoiceInput: React.FC<VoiceInputProps> = ({ onTranscriptChange, disabled = 
     browserSupportsSpeechRecognition
   } = useSpeechRecognition();
 
-  // Update parent component when transcript changes
+  // Update parent component when transcript changes, but only when listening
   useEffect(() => {
-    onTranscriptChange(transcript);
-  }, [transcript, onTranscriptChange]);
+    if (listening && transcript) {
+      onTranscriptChange(transcript);
+    }
+  }, [transcript, listening, onTranscriptChange]);
 
   const startListening = () => {
     if (!disabled && browserSupportsSpeechRecognition) {
       resetTranscript();
+      // Clear the input field when starting voice input
+      onTranscriptChange('');
       SpeechRecognition.startListening({ continuous: true, interimResults: true });
     }
   };

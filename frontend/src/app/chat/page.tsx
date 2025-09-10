@@ -193,7 +193,10 @@ const ChatPage = () => {
   };
 
   const handleVoiceTranscriptChange = (transcript: string) => {
-    setInputText(transcript);
+    // Only update if there's a transcript and it's different from current input
+    if (transcript && transcript !== inputText) {
+      setInputText(transcript);
+    }
   };
 
   useEffect(() => {
