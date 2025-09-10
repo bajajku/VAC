@@ -589,7 +589,7 @@ async def startup_event():
             "app_type": "rag_agent",
             "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
             "llm_provider": "chatopenai",
-            "llm_model": "Qwen/Qwen2.5-7B-Instruct",
+            "llm_model": "Qwen/Qwen2.5-14B-Instruct",
             "persist_directory": "./chroma_db",
             "collection_name": "demo_collection",
             "api_key": "token-abc123",
