@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink, LogOut } from 'lucide-react';
 import VoiceInput from '../../components/VoiceInput';
+import TTS from '../../components/TTS';
 import Link from 'next/link';
 // Removed unnecessary dotenv import
 import ReactMarkdown from 'react-markdown';
@@ -56,6 +57,7 @@ type Message = {
   timestamp: Date;
   feedbackSubmitted?: boolean;
   sources?: string[]; // Array of source URLs
+  tts?: boolean;
 };
 
 const ChatPage = () => {
@@ -65,7 +67,8 @@ const ChatPage = () => {
       id: 1,
       text: "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?",
       sender: 'bot',
-      timestamp: new Date()
+      timestamp: new Date(),
+      tts: true
     }
   ]);
   const [inputText, setInputText] = useState('');
@@ -136,7 +139,8 @@ const ChatPage = () => {
             id: 1,
             text: INITIAL_GREETING,
             sender: 'bot',
-            timestamp: new Date()
+            timestamp: new Date(),
+            tts: true
           }]);
         } else {
           setMessages(convertedMessages);
@@ -162,7 +166,8 @@ const ChatPage = () => {
       id: 1,
       text: "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?",
       sender: 'bot',
-      timestamp: new Date()
+      timestamp: new Date(),
+      tts: true
     }]);
     setInputText('');
     setLastQuestion('');
@@ -177,7 +182,8 @@ const ChatPage = () => {
       id: Date.now(),
       text: inputText,
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      tts: false
     };
   
     setMessages(prev => [...prev, userMessage]);
@@ -334,7 +340,8 @@ const ChatPage = () => {
               text: fullText,
               sender: 'bot',
               timestamp: new Date(),
-              sources: [...collectedSources]
+              sources: [...collectedSources],
+              tts: true
             };
             botMessageId = newBotMessage.id;
             setMessages(prev => [...prev, newBotMessage]);
@@ -356,7 +363,8 @@ const ChatPage = () => {
           id: Date.now() + 1,
           text: "I apologize, but I'm having trouble connecting right now. Please try again in a moment. If you need immediate support, please reach out to a healthcare professional or the Veterans Crisis Line.",
           sender: 'bot',
-          timestamp: new Date()
+          timestamp: new Date(),
+          tts: true
         }]);
         setIsTyping(false);
       }
@@ -603,6 +611,16 @@ const ChatPage = () => {
                   <span className="text-xs text-slate-500">
                     {formatTime(message.timestamp)}
                   </span>
+                  
+                  {/* TTS Button for Bot Messages */}
+                  {message.sender === 'bot' && message.tts && (
+                    <TTS 
+                      text={message.text} 
+                      compact={true}
+                      className="ml-1"
+                    />
+                  )}
+                  
                   {message.sender === 'bot' && message.feedbackSubmitted && (
                     <div className="flex items-center space-x-1">
                       <CheckCircle2 className="w-3 h-3 text-green-500" />
