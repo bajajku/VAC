@@ -1,6 +1,7 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink, LogOut } from 'lucide-react';
+import VoiceInput from '../../components/VoiceInput';
 import Link from 'next/link';
 // Removed unnecessary dotenv import
 import ReactMarkdown from 'react-markdown';
@@ -183,6 +184,10 @@ const ChatPage = () => {
     setLastQuestion(inputText);
     setInputText('');
     setIsTyping(true);
+  };
+
+  const handleVoiceTranscriptChange = (transcript: string) => {
+    setInputText(transcript);
   };
 
   useEffect(() => {
@@ -677,6 +682,13 @@ const ChatPage = () => {
                 aria-label="Type your message"
               />
             </div>
+            
+            {/* Voice Input Component */}
+            <VoiceInput 
+              onTranscriptChange={handleVoiceTranscriptChange}
+              disabled={isTyping}
+            />
+            
             <button
               onClick={handleSendMessage}
               disabled={!inputText.trim() || isTyping}
