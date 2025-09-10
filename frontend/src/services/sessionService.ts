@@ -40,6 +40,7 @@ export type FrontendMessage = {
   timestamp: Date;
   feedbackSubmitted?: boolean;
   sources?: string[];
+  tts?: boolean;
 };
 
 class SessionService {
@@ -210,9 +211,10 @@ class SessionService {
       sender: backendMessage.sender === 'assistant' ? 'bot' : backendMessage.sender,
       timestamp: new Date(backendMessage.timestamp),
       feedbackSubmitted: false,
-      sources: backendMessage.sources || []
+      sources: backendMessage.sources || [],
+      tts: backendMessage.sender === 'assistant' ? true : false
     };
-  }
+  } 
 
   // Convert frontend message format to backend format
   convertFrontendMessage(frontendMessage: FrontendMessage): ChatMessage {
