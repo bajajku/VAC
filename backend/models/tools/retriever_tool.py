@@ -5,7 +5,7 @@ import asyncio
 
 @tool
 def retrieve_information(query: str, max_results: int = 5, 
-                        retrieval_strategy: str = "similarity",
+                        retrieval_strategy: str = "hybrid",
                         use_reranking: bool = False) -> str:
     """
     Search the knowledge base for information related to the query using optimized retrieval techniques.
@@ -40,7 +40,7 @@ def retrieve_information(query: str, max_results: int = 5,
         # Process and format the results with optimized content handling for streaming
         formatted_results = []
         total_chars = 0
-        max_total_chars = 800  # Reduced from 2000 to 800 for faster streaming
+        max_total_chars = 2000  # Reduced from 2000 to 800 for faster streaming
         
         for i, doc in enumerate(docs, 1):
             content = doc.page_content.strip()
