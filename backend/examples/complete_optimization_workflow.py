@@ -25,7 +25,10 @@ from models.llm import LLM
 from models.rag_agent import RAGAgent
 import json
 from datetime import datetime
-
+from dotenv import load_dotenv
+from pathlib import Path
+load_dotenv()
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 
 class OptimizationWorkflow:
     """Complete workflow for prompt optimization using evaluation feedback."""
