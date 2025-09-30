@@ -40,13 +40,25 @@ class OptimizationWorkflow:
         try:
             # Create evaluator
             evaluator_configs = [
-                {'provider': 'openai', 'model_name': 'gpt-3.5-turbo', 'api_key': self.api_keys.get('openai')},
-                {'provider': 'openrouter', 'model_name': 'mistral-7b-instruct', 'api_key': self.api_keys.get('openrouter')},
+                {
+                    "provider": "chatopenai",
+                    "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+                    "api_key": TOGETHER_API_KEY,
+                },
+                {
+                    "provider": "chatopenai",
+                    "model_name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
+                    "api_key": TOGETHER_API_KEY,
+                },
+                {
+                    "provider": "huggingface_pipeline",
+                    "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
+                }
             ]
             self.evaluator = create_rag_evaluator(evaluator_configs)
             
             # Create prompt optimizer
-            optimizer_llm = LLM(provider='openai', model_name='gpt-4', api_key=self.api_keys.get('openai'))
+            optimizer_llm = LLM(provider='chatopenai', model_name='Qwen/Qwen2.5-14B-Instruct', api_key="token-abc123")
             self.optimizer = create_prompt_optimizer(
                 optimizer_llm=optimizer_llm,
                 max_iterations=3,

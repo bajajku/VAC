@@ -38,9 +38,21 @@ def demo_enhanced_evaluation():
     # Create a diverse jury for evaluation
     try:
         jury_configs = [
-            {'provider': 'openai', 'model_name': 'gpt-3.5-turbo', 'api_key': api_keys.get('openai')},
-            {'provider': 'openrouter', 'model_name': 'mistral-7b-instruct', 'api_key': api_keys.get('openrouter')},
-        ]
+        {
+            "provider": "chatopenai",
+            "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+            "api_key": TOGETHER_API_KEY,
+        },
+        {
+            "provider": "chatopenai",
+            "model_name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
+            "api_key": TOGETHER_API_KEY,
+        },
+        {
+            "provider": "huggingface_pipeline",
+            "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
+        }
+    ]
         
         evaluator = create_rag_evaluator(jury_configs)
         print(f"✅ Created evaluator with {len(jury_configs)} jury members")
