@@ -17,7 +17,7 @@ class RAGAgent:
     
     def __init__(self, llm: LLM, **kwargs):
         self.llm = llm.create_chat()
-        self.system_prompt = self.get_system_prompt()
+        self.system_prompt = kwargs.get("system_prompt", self.get_system_prompt())
         # Import the async tool for streaming optimization
         from models.tools.retriever_tool import aretrieve_information
         self.tools = [retrieve_information]
