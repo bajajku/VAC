@@ -45,13 +45,13 @@ class OptimizationWorkflow:
             evaluator_configs = [
                 {
                     "provider": "chatopenai",
-                    "model_name": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-                    "api_key": TOGETHER_API_KEY,
+                    "model_name": "Qwen/Qwen2.5-14B-Instruct",
+                    "api_key": "token-abc123",
                 },
                 {
                     "provider": "chatopenai",
-                    "model_name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
-                    "api_key": TOGETHER_API_KEY,
+                    "model_name": "Qwen/Qwen2.5-14B-Instruct",
+                    "api_key": "token-abc123",
                 },
                 {
                     "provider": "huggingface_pipeline",
