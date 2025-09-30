@@ -284,15 +284,21 @@ class Jury:
                             continue
                     
                     if parsed_json:
-                        # It's a JSON evaluation - extract score, reasoning, confidence
+                        # It's a JSON evaluation - extract score, reasoning, confidence, pass_fail, improvements
                         score = float(parsed_json.get('score', 5.0))
                         reasoning = parsed_json.get('reasoning', '')
                         confidence = float(parsed_json.get('confidence', 0.5))
+                        pass_fail = parsed_json.get('pass_fail', 'FAIL' if score < 7 else 'PASS')
+                        improvement_suggestions = parsed_json.get('improvement_suggestions', '')
                         
                         weighted_scores.append((score, weight))
                         weighted_reasoning.append((reasoning, weight))
                         weighted_confidence.append((confidence, weight))
-                        json_responses.append(response['provider'])
+                        json_responses.append({
+                            'provider': response['provider'],
+                            'pass_fail': pass_fail,
+                            'improvement_suggestions': improvement_suggestions
+                        })
                     else:
                         raise ValueError("Not a JSON evaluation response")
                         
@@ -313,20 +319,37 @@ class Jury:
             total_conf_weight = sum(weight for _, weight in weighted_confidence)
             avg_confidence = sum(conf * weight for conf, weight in weighted_confidence) / total_conf_weight
             
-            # Combine reasoning with weights (simple concatenation for now)
+            # Calculate aggregate pass/fail based on weighted votes
+            pass_votes = sum(weight for resp, weight in zip(json_responses, [w for _, w in weighted_scores]) if resp['pass_fail'] == 'PASS')
+            total_weight = sum(weight for _, weight in weighted_scores)
+            pass_rate = (pass_votes / total_weight) * 100 if total_weight > 0 else 0
+            aggregate_pass_fail = 'PASS' if pass_rate >= 50 else 'FAIL'  # Majority rule for pass/fail
+            
+            # Combine reasoning with weights
             reasoning_parts = []
-            for reasoning, weight in weighted_reasoning:
-                if reasoning:  # Only include non-empty reasoning
-                    provider = json_responses[len(reasoning_parts)] if len(reasoning_parts) < len(json_responses) else "unknown"
-                    reasoning_parts.append(f"[{provider}:{weight:.1f}w] {reasoning}")
+            for i, (reasoning, weight) in enumerate(weighted_reasoning):
+                if reasoning and i < len(json_responses):  # Only include non-empty reasoning
+                    provider = json_responses[i]['provider']
+                    status = json_responses[i]['pass_fail']
+                    reasoning_parts.append(f"[{provider}:{weight:.1f}w,{status}] {reasoning}")
             
             combined_reasoning = " | ".join(reasoning_parts) if reasoning_parts else "No detailed reasoning provided"
+            
+            # Compile improvement suggestions from failed evaluations
+            improvement_parts = []
+            for resp in json_responses:
+                if resp['pass_fail'] == 'FAIL' and resp['improvement_suggestions']:
+                    improvement_parts.append(f"[{resp['provider']}] {resp['improvement_suggestions']}")
+            
+            combined_improvements = " | ".join(improvement_parts) if improvement_parts else "No specific improvement suggestions"
             
             # Return weighted average as JSON
             result = json.dumps({
                 "score": round(avg_score, 1),
-                "reasoning": f"Weighted average of {len(weighted_scores)} evaluations: {combined_reasoning}",
-                "confidence": round(avg_confidence, 2)
+                "pass_fail": aggregate_pass_fail,
+                "reasoning": f"Weighted average of {len(weighted_scores)} evaluations (Pass rate: {pass_rate:.1f}%): {combined_reasoning}",
+                "confidence": round(avg_confidence, 2),
+                "improvement_suggestions": combined_improvements
             })
             print(f"✅ Jury weighted average from {successful_count}/{len(responses)} members: {avg_score:.1f}/10")
             return result
@@ -377,8 +400,10 @@ class Jury:
         # For JSON responses, check if scores are unanimous even if formatting differs
         if all(isinstance(resp, dict) and 'score' in resp for resp in parsed_responses):
             scores = [resp['score'] for resp in parsed_responses]
-            if len(set(scores)) == 1:
-                # Unanimous score agreement - return the first response (they all have same score)
+            pass_fails = [resp.get('pass_fail', 'FAIL' if resp['score'] < 7 else 'PASS') for resp in parsed_responses]
+            
+            if len(set(scores)) == 1 and len(set(pass_fails)) == 1:
+                # Unanimous score and pass/fail agreement - return the first response
                 return json_responses[0]
         
         # No unanimity - for evaluation tasks, return average score in JSON format
@@ -387,10 +412,23 @@ class Jury:
             combined_reasoning = " | ".join([resp.get('reasoning', '') for resp in parsed_responses])
             avg_confidence = statistics.mean([resp.get('confidence', 0.5) for resp in parsed_responses])
             
+            # Calculate pass/fail based on majority
+            pass_count = sum(1 for resp in parsed_responses if resp.get('pass_fail', 'FAIL' if resp['score'] < 7 else 'PASS') == 'PASS')
+            majority_pass_fail = 'PASS' if pass_count > len(parsed_responses) / 2 else 'FAIL'
+            
+            # Compile improvement suggestions
+            improvements = []
+            for resp in parsed_responses:
+                if resp.get('improvement_suggestions'):
+                    improvements.append(resp['improvement_suggestions'])
+            combined_improvements = " | ".join(improvements) if improvements else "No specific improvement suggestions"
+            
             return json.dumps({
                 "score": round(avg_score, 1),
+                "pass_fail": majority_pass_fail,
                 "reasoning": f"No unanimous agreement. Average of {len(parsed_responses)} responses: {combined_reasoning}",
-                "confidence": round(avg_confidence, 2)
+                "confidence": round(avg_confidence, 2),
+                "improvement_suggestions": combined_improvements
             })
         
         # For non-JSON responses, return the original behavior
