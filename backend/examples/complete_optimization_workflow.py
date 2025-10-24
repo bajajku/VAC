@@ -50,9 +50,9 @@ class OptimizationWorkflow:
                 },
                 {
                     "provider": "chatopenai",
-                    "model_name": "Qwen/Qwen2.5-14B-Instruct",
-                    "api_key": "token-abc123",
-                },
+                    "model_name": "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
+                    "api_key": TOGETHER_API_KEY,
+                },  
                 {
                     "provider": "huggingface_pipeline",
                     "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
