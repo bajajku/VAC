@@ -21,8 +21,8 @@ class EvaluationSystem:
 
     def __init__(self):
         self.rag_app = self.initialize_rag_agent()
-        self.jury_evaluator = self.initialize_evaluation_system()
-        self.prompt_optimizer = self.initialize_prompt_optimizer()
+        # self.jury_evaluator = self.initialize_evaluation_system()
+        # self.prompt_optimizer = self.initialize_prompt_optimizer()
 
     def initialize_evaluation_system(self):
         """Initialize the evaluation system."""
