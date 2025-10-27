@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.config.constants import PROMPT_TEMPLATE
+from config.constants import PROMPT_TEMPLATE
 from models.rag_evaluator import create_rag_evaluator
 from models.prompt_optimizer import create_prompt_optimizer
 from models.llm import LLM
