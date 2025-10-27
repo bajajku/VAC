@@ -1,7 +1,7 @@
 import sys
 import os
 
-from backend.utils.prompt import Prompt
+from utils.prompt import Prompt
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.config.constants import PROMPT_TEMPLATE
