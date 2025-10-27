@@ -24,7 +24,7 @@ class EvaluationSystem:
         self.jury_evaluator = self.initialize_evaluation_system()
         self.prompt_optimizer = self.initialize_prompt_optimizer()
 
-    def initialize_evaluation_system():
+    def initialize_evaluation_system(self):
         """Initialize the evaluation system."""
         jury_evaluator_configs = [
             {'provider': 'chatopenai', 'model_name': 'meta-llama/Llama-3.1-8B-Instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1"},
@@ -35,7 +35,7 @@ class EvaluationSystem:
         print(f"✅ Initialized jury evaluator with {len(jury_evaluator_configs)} jury members")
         return jury_evaluator
 
-    def initialize_prompt_optimizer():
+    def initialize_prompt_optimizer(self):
         """Initialize the prompt optimizer."""
         prompt_optimizer = create_prompt_optimizer(
             optimizer_llm=LLM(provider='chatopenai', model_name='Qwen/Qwen2.5-14B-Instruct', api_key="token-abc123"),
@@ -45,7 +45,7 @@ class EvaluationSystem:
         print(f"✅ Initialized prompt optimizer")
         return prompt_optimizer
 
-    def initialize_rag_agent():
+    def initialize_rag_agent(self):
         """Initialize the RAG agent."""
         rag_app = get_app()
         
@@ -126,7 +126,7 @@ class EvaluationSystem:
 
         return rag_app
     
-    def initialize_test_cases():
+    def initialize_test_cases(self):
         """Initialize the test cases."""
         test_cases = [
             "What are the symptoms of PTSD in military veterans?",
