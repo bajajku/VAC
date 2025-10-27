@@ -1,7 +1,6 @@
 import sys
 import os
 
-from utils.prompt import Prompt
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.config.constants import PROMPT_TEMPLATE
@@ -12,6 +11,7 @@ from core.app import get_app
 from pathlib import Path
 from models.guardrails import Guardrails
 from langchain_core.documents import Document
+from utils.prompt import Prompt
 import dotenv
 dotenv.load_dotenv()
 
