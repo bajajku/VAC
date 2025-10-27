@@ -63,9 +63,9 @@ class RAGChain(Chain):
             combine_docs_chain=self.doc_chain,
         )
     
-    def invoke(self, question: str) -> str:
+    def invoke(self, question: str):
         response = self.rag_chain.invoke({"input": question})
-        return response['answer']
+        return response
     
     def ainvoke(self, question: str) -> str:
         return self.rag_chain.ainvoke({"input": question})
