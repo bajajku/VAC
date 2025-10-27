@@ -58,7 +58,7 @@ class EvaluationSystem:
             "collection_name": "demo_collection",
             "api_key": "token-abc123",
             "chats_by_session_id": {},
-            "prompt": Prompt(template=PROMPT_TEMPLATE).get_prompt(),
+            "prompt": Prompt(template=PROMPT_TEMPLATE),
         }
         rag_app.initialize(**config)
         
