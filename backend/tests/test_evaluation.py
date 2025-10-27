@@ -146,10 +146,11 @@ class EvaluationSystem:
         return test_cases
 
     def evaluate_system(self):
+        print(type(self.rag_app))
+        # for test_case in self.test_cases:
 
-        for test_case in self.test_cases:
-            response = self.rag_app.chain.invoke(test_case)
-            print(f"Response: {response}")
+        #     response = self.rag_app.invoke(test_case)
+        #     print(f"Response: {response}")
 
 
 evaluation_system = EvaluationSystem()
