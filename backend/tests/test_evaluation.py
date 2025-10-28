@@ -147,6 +147,7 @@ class EvaluationSystem:
 
     def evaluate_system(self):
         print(type(self.rag_app))
+        print(dir(self.rag_app))
         # for test_case in self.test_cases:
 
         #     response = self.rag_app.invoke(test_case)

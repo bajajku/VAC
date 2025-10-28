@@ -50,6 +50,7 @@ class RAGChain(Chain):
     def create_chain(self, chain_type: str = "rag"):
         match chain_type:
             case "rag":
+                print("Creating RAG chain")
                 return self.create_rag_chain()
             case _:
                 raise ValueError(f"Invalid chain type: {chain_type}")
