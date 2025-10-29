@@ -133,3 +133,12 @@ def get_chat_history(session_id: str, chats_by_session_id: dict, max_tokens: int
 
 def store_chat_message(session_id: str, message: str, sender: str):
     pass
+
+def condense_context(context: list) -> str:
+    """Condense the context into a string."""
+    condensed_context = ""
+
+    for document in context:
+        condensed_context += document.page_content
+
+    return condensed_context

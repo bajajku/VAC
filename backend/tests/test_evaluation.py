@@ -13,6 +13,7 @@ from models.guardrails import Guardrails
 from langchain_core.documents import Document
 from utils.prompt import Prompt
 import dotenv
+from utils.helper import condense_context
 dotenv.load_dotenv()
 
 SKIP_AUTO_PROCESSING = os.getenv("SKIP_AUTO_PROCESSING", "false").lower() == "true"
@@ -149,7 +150,7 @@ class EvaluationSystem:
         for test_case in self.test_cases:
 
             response = self.rag_app.rag_application.invoke(test_case)
-            print(f"Response: {response}")
+            query, context, answer = response['input'], condense_context(response['context']), response['answer']
 
 
 evaluation_system = EvaluationSystem()
