@@ -212,7 +212,7 @@ class ChatOpenAILLM(BaseLLM):
             model=self.model_name,
             api_key=self.api_key,
             streaming=True,
-            **{k: v for k, v in self.config.items() if k != 'model'}
+            **{k: v for k, v in self.config.items() if k not in ['model', 'base_url']}
         )
 
 class LLMFactory:   
