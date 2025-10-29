@@ -3,7 +3,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.constants import PROMPT_TEMPLATE
+from config.constants import PROMPT_TEMPLATE, TEST_CASES
 from models.rag_evaluator import create_rag_evaluator
 from models.prompt_optimizer import create_prompt_optimizer
 from models.llm import LLM
@@ -21,11 +21,77 @@ SKIP_AUTO_PROCESSING = os.getenv("SKIP_AUTO_PROCESSING", "false").lower() == "tr
 class EvaluationSystem:
 
     def __init__(self):
-        self.rag_app = self.initialize_rag_agent()
-        # self.jury_evaluator = self.initialize_evaluation_system()
-        # self.prompt_optimizer = self.initialize_prompt_optimizer()
+        self.rag_app = None
+        self.jury_evaluator = self.initialize_evaluation_system()
+        self.prompt_optimizer = self.initialize_prompt_optimizer()
         self.test_cases = self.initialize_test_cases()
+    
+    # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------
+    '''Display evaluation results in a formatted way.'''
+    def display_evaluation_results(self, phase: str, results: list):
+        """Display evaluation results in a formatted way."""
+        print(f"{phase} Evaluation Results:")
+        
+        total_score = sum(r.overall_score for r in results) / len(results)
+        total_pass_rate = sum(r.pass_rate for r in results) / len(results)
+        
+        print(f"  Average Score: {total_score:.1f}/10")
+        print(f"  Average Pass Rate: {total_pass_rate:.1f}%")
+        
+        # Show failed criteria
+        all_failed = []
+        for result in results:
+            failed = [name for name, eval_result in result.evaluation_results.items() 
+                        if eval_result.pass_fail == "FAIL"]
+            all_failed.extend(failed)
+        
+        if all_failed:
+            from collections import Counter
+            failed_counts = Counter(all_failed)
+            print(f"  Most Common Failures: {dict(failed_counts.most_common(3))}")
+        
+    
+    def display_suggestions(self, suggestions: list):
+        """Display improvement suggestions."""
+        print("Improvement Suggestions:")
+        for i, suggestion in enumerate(suggestions[:5], 1):
+            print(f"  {i}. {suggestion}")
+        
+    def display_optimization_result(self, result):
+        """Display optimization result."""
+        print("Optimization Result:")
+        print(f"  Applied {len(result.applied_suggestions)} suggestions")
+        print(f"  Key Changes: {result.optimization_reasoning[:100]}...")
+        print(f"  Prompt Length: {len(result.optimized_prompt)} characters")
+    
+        
+    def extract_suggestions_from_results(self, results: list) -> list:
+        """Extract improvement suggestions from evaluation results."""
+        all_suggestions = []
+        
+        for result in results:
+            all_suggestions.extend(result.aggregated_improvements)
+        
+        # Deduplicate while preserving order
+        unique_suggestions = []
+        seen = set()
+        for suggestion in all_suggestions:
+            if suggestion not in seen:
+                unique_suggestions.append(suggestion)
+                seen.add(suggestion)
+        
+        return unique_suggestions
+    
+    def optimize_prompt(self, current_prompt: str, evaluation_report) -> object:
+        """Optimize the prompt based on evaluation feedback."""
+        return self.prompt_optimizer.optimize_prompt_from_evaluation(
+            current_prompt=current_prompt,
+            evaluation_report=evaluation_report,
+            iteration_number=1
+        )
+    # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------
 
+    # INITIALIZATION FUNCTIONS ------------------------------------------------------------------------------------------------
     def initialize_evaluation_system(self):
         """Initialize the evaluation system."""
         jury_evaluator_configs = [
@@ -47,7 +113,7 @@ class EvaluationSystem:
         print(f"✅ Initialized prompt optimizer")
         return prompt_optimizer
 
-    def initialize_rag_agent(self):
+    def initialize_rag_agent(self, prompt: str = PROMPT_TEMPLATE):
         """Initialize the RAG agent."""
         rag_app = get_app()
         
@@ -60,7 +126,7 @@ class EvaluationSystem:
             "collection_name": "demo_collection",
             "api_key": "token-abc123",
             "chats_by_session_id": {},
-            "prompt": Prompt(template=PROMPT_TEMPLATE),
+            "prompt": Prompt(template=prompt),
         }
         rag_app.initialize(**config)
         
@@ -145,13 +211,138 @@ class EvaluationSystem:
         ]
 
         return test_cases
+    # INITIALIZATION FUNCTIONS ------------------------------------------------------------------------------------------------
+    # EVALUATION FUNCTIONS ------------------------------------------------------------------------------------------------
+    def evaluate_system(self, prompt: str = PROMPT_TEMPLATE):
+        self.rag_app = self.initialize_rag_agent(prompt)
+        results = []
+        for tc in TEST_CASES:
+            print(f"Evaluating test case: {tc}")
 
-    def evaluate_system(self):
-        for test_case in self.test_cases:
-
-            response = self.rag_app.rag_application.invoke(test_case)
+            response = self.rag_app.rag_application.invoke(tc)
             query, context, answer = response['input'], condense_context(response['context']), response['answer']
 
+            evaluation_report = self.jury_evaluator.evaluate_rag_response(
+                query= query,
+                response=answer,
+                context_documents=context
+                )
 
-evaluation_system = EvaluationSystem()
-evaluation_system.evaluate_system()
+            results.append(evaluation_report)
+
+        return results
+    
+    def main(self):
+        """Run the complete evaluation and optimization workflow."""
+        print("🚀 Starting Evaluation System Workflow")
+        print("=" * 60)
+        
+        try:
+            # Step 1: Initial Evaluation
+            print("\n📊 Step 1: Initial System Evaluation")
+            print("-" * 40)
+            results = self.evaluate_system()
+            self.display_evaluation_results("Initial", results)
+            
+            # Step 2: Extract Suggestions
+            print("\n💡 Step 2: Extracting Improvement Suggestions")
+            print("-" * 40)
+            suggestions = self.extract_suggestions_from_results(results)
+            self.display_suggestions(suggestions)
+
+            # Step 3: Optimize Prompt
+            print("\n🔧 Step 3: Optimizing System Prompt")
+            print("-" * 40)
+            optimization_result = self.optimize_prompt(PROMPT_TEMPLATE, results[0])
+            self.display_optimization_result(optimization_result)
+            
+            # Step 4: Re-evaluate Optimized System
+            print("\n📈 Step 4: Re-evaluating Optimized System")
+            print("-" * 40)
+            optimized_results = self.evaluate_system(optimization_result.optimized_prompt)
+            self.display_evaluation_results("Optimized", optimized_results)
+            
+            # Step 5: Compare Results
+            print("\n📊 Step 5: Comparing Results")
+            print("-" * 40)
+            self.compare_results(results, optimized_results)
+            
+            # Step 6: Save Results
+            print("\n💾 Step 6: Saving Results")
+            print("-" * 40)
+            self.save_workflow_results(results, optimized_results, optimization_result)
+            
+            print("\n✅ Evaluation workflow completed successfully!")
+            return optimization_result
+            
+        except Exception as e:
+            print(f"❌ Workflow failed: {e}")
+            raise
+    
+    def compare_results(self, initial_results: list, optimized_results: list):
+        """Compare initial vs optimized results."""
+        initial_avg_score = sum(r.overall_score for r in initial_results) / len(initial_results)
+        optimized_avg_score = sum(r.overall_score for r in optimized_results) / len(optimized_results)
+        
+        initial_avg_pass_rate = sum(r.pass_rate for r in initial_results) / len(initial_results)
+        optimized_avg_pass_rate = sum(r.pass_rate for r in optimized_results) / len(optimized_results)
+        
+        score_improvement = optimized_avg_score - initial_avg_score
+        pass_rate_improvement = optimized_avg_pass_rate - initial_avg_pass_rate
+        
+        print("Performance Comparison:")
+        print(f"  Score Improvement: {score_improvement:+.1f} points ({initial_avg_score:.1f} → {optimized_avg_score:.1f})")
+        print(f"  Pass Rate Improvement: {pass_rate_improvement:+.1f}% ({initial_avg_pass_rate:.1f}% → {optimized_avg_pass_rate:.1f}%)")
+        
+        if score_improvement > 0:
+            print("  ✅ System performance improved!")
+        else:
+            print("  ⚠️ No significant improvement detected")
+    
+    def save_workflow_results(self, initial_results: list, optimized_results: list, optimization_result):
+        """Save workflow results for future analysis."""
+        from datetime import datetime
+        import json
+        from pathlib import Path
+        
+        workflow_data = {
+            'timestamp': datetime.now().isoformat(),
+            'initial_results': [self._serialize_evaluation_report(r) for r in initial_results],
+            'optimized_results': [self._serialize_evaluation_report(r) for r in optimized_results],
+            'optimization_result': {
+                'iteration_number': optimization_result.iteration_number,
+                'applied_suggestions': optimization_result.applied_suggestions,
+                'optimization_reasoning': optimization_result.optimization_reasoning,
+                'original_prompt_length': len(optimization_result.original_prompt),
+                'optimized_prompt_length': len(optimization_result.optimized_prompt)
+            }
+        }
+        
+        # Save to workflow logs
+        workflow_log_dir = Path("logs/evaluation_workflows")
+        workflow_log_dir.mkdir(parents=True, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        workflow_file = workflow_log_dir / f"evaluation_workflow_{timestamp}.json"
+        
+        with open(workflow_file, 'w', encoding='utf-8') as f:
+            json.dump(workflow_data, f, indent=2, ensure_ascii=False, default=str)
+        
+        print(f"💾 Saved workflow results to {workflow_file}")
+    
+    def _serialize_evaluation_report(self, report) -> dict:
+        """Convert evaluation report to serializable dict."""
+        return {
+            'query': report.query,
+            'overall_score': report.overall_score,
+            'overall_pass_fail': report.overall_pass_fail,
+            'pass_rate': report.pass_rate,
+            'aggregated_improvements': report.aggregated_improvements,
+            'timestamp': report.timestamp
+        }
+    # EVALUATION FUNCTIONS ------------------------------------------------------------------------------------------------
+
+# For testing the workflow
+if __name__ == "__main__":
+    evaluation_system = EvaluationSystem()
+    evaluation_system.main()
