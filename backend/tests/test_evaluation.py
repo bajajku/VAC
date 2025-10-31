@@ -4,6 +4,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.constants import PROMPT_TEMPLATE, TEST_CASES
+from models.test_case_generator import TestCaseGenerator
 from models.rag_evaluator import create_rag_evaluator
 from models.prompt_optimizer import create_prompt_optimizer
 from models.llm import LLM
@@ -27,6 +28,13 @@ class EvaluationSystem:
         self.test_cases = self.initialize_test_cases()
     
     # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------
+
+    def graph_evaluation_results(self, results: list):
+        """Graph evaluation results."""
+        # TODO: Implement the logic to graph evaluation results
+        pass
+
+    
     '''Display evaluation results in a formatted way.'''
     def display_evaluation_results(self, phase: str, results: list):
         """Display evaluation results in a formatted way."""
@@ -193,9 +201,26 @@ class EvaluationSystem:
             print("⏩ Auto-processing skipped. Use API endpoints to load data manually.")
 
         return rag_app
+
+    '''
+    1 epoch: (100 * 11 = 1100)
+
+    Graph:
+        x: number of epoch
+        y: average score
+
+    '''
+
+
     
     def initialize_test_cases(self):
         """Initialize the test cases."""
+
+        # TODO: Initialize the test case generator, and use it to generate test cases
+        test_case_generator = TestCaseGenerator(llm=LLM(provider='chatopenai', model_name='Qwen/Qwen2.5-14B-Instruct', api_key="token-abc123"), input_prompt=PROMPT_TEMPLATE, conditions=[])
+
+        # TODO: Add more test cases 100+
+        # can use TestCaseGenerator to generate more test cases, can use (MultiQueryRetriever)
         test_cases = [
             "What are the symptoms of PTSD in military veterans?",
             "How can mindfulness help with anxiety?",
