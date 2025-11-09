@@ -86,7 +86,7 @@ GUARDRAIL_POLICIES = {
     ],
 
     "military_mental_health_performance_optimized": [
-        "llm_validation",
+        "crisis_escalation",
     ],
     
     # Legacy policies (kept for compatibility)
