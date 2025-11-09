@@ -22,6 +22,7 @@ import numpy as np
 from typing import Dict, List
 from dataclasses import dataclass
 from datetime import datetime
+import asyncio
 dotenv.load_dotenv()
 
 SKIP_AUTO_PROCESSING = os.getenv("SKIP_AUTO_PROCESSING", "false").lower() == "true"
@@ -78,6 +79,44 @@ class JudgeLLM:
         # Get judge's verdict
         chat = self.judge_llm.create_chat()
         judge_response = chat.invoke(judge_prompt)
+        judge_content = judge_response.content if hasattr(judge_response, 'content') else str(judge_response)
+        
+        # Parse judge verdict
+        return self._parse_judge_verdict(judge_content)
+    
+    async def render_final_verdict_async(self, criterion: str, jury_result: dict, query: str, 
+                                   response: str, context: List[str]) -> JudgeVerdict:
+        """
+        Async version of render_final_verdict.
+        Render final verdict for a criterion based on jury evaluations.
+        
+        Args:
+            criterion: The evaluation criterion being judged
+            jury_result: The complete jury evaluation result with individual responses
+            query: The original query
+            response: The RAG system response
+            context: Context documents used
+        
+        Returns:
+            JudgeVerdict with final score and decision
+        """
+        # Extract individual jury evaluations
+        individual_responses = jury_result.get('individual_responses', [])
+        consensus = jury_result.get('consensus', '')
+        
+        # Build judge verdict prompt
+        judge_prompt = self._build_verdict_prompt(
+            criterion=criterion,
+            query=query,
+            response=response,
+            context=context,
+            individual_responses=individual_responses,
+            consensus=consensus
+        )
+        
+        # Get judge's verdict asynchronously
+        chat = self.judge_llm.create_chat()
+        judge_response = await chat.ainvoke(judge_prompt)
         judge_content = judge_response.content if hasattr(judge_response, 'content') else str(judge_response)
         
         # Parse judge verdict
@@ -613,15 +652,18 @@ class EvaluationSystem:
             print(f"Evaluating test case {i}/{len(TEST_CASES)}: {tc[:60]}...")
             print(f"{'='*60}")
 
+            # RAG response generation - KEEP SYNCHRONOUS
             response = self.rag_app.rag_application.invoke(tc)
             query, context, answer = response['input'], condense_context(response['context']), response['answer']
 
             if use_judge:
-                # Use judge-supervised evaluation
-                evaluation_report = self.evaluate_with_judge(
-                    query=query,
-                    response=answer,
-                    context_documents=context
+                # Use async judge-supervised evaluation (criteria evaluated in parallel)
+                evaluation_report = asyncio.run(
+                    self.evaluate_with_judge_async(
+                        query=query,
+                        response=answer,
+                        context_documents=context
+                    )
                 )
             else:
                 # Use standard jury evaluation
@@ -682,6 +724,110 @@ class EvaluationSystem:
             )
             
             print(f"      👨‍⚖️ Judge Verdict: {judge_verdict.final_score:.1f}/10 ({judge_verdict.final_pass_fail}) - Agreement: {judge_verdict.jury_agreement_level}")
+        
+        # Calculate overall metrics
+        overall_score = self.jury_evaluator._calculate_overall_score(evaluation_results)
+        overall_pass_fail, pass_rate = self.jury_evaluator._calculate_aggregate_pass_fail(evaluation_results)
+        aggregated_improvements = self.jury_evaluator._compile_improvement_suggestions(evaluation_results)
+        
+        print(f"  ✅ Final Verdict: {overall_score:.2f}/10, Pass rate: {pass_rate:.1f}%, Overall: {overall_pass_fail}")
+        
+        # Create evaluation report with judge verdicts
+        return RAGEvaluationReport(
+            query=query,
+            response=response,
+            context_documents=context_documents,
+            overall_score=overall_score,
+            overall_pass_fail=overall_pass_fail,
+            pass_rate=pass_rate,
+            evaluation_results=evaluation_results,
+            aggregated_improvements=aggregated_improvements,
+            timestamp=datetime.now().isoformat(),
+            jury_composition={
+                **self.jury_evaluator.jury.get_jury_info(),
+                'judge_enabled': True,
+                'judge_model': self.judge_llm.judge_llm.model_name
+            }
+        )
+    
+    async def evaluate_with_judge_async(self, query: str, response: str, context_documents: List[str]):
+        """
+        Async version: Evaluate using jury + judge system with parallelized criteria evaluation.
+        The jury deliberates, then the judge renders final verdicts - all criteria in parallel.
+        
+        Args:
+            query: The query being evaluated
+            response: The RAG system response
+            context_documents: Context documents used
+            
+        Returns:
+            RAGEvaluationReport with all criteria evaluated in parallel
+        """
+        from models.rag_evaluator import RAGEvaluationReport, EvaluationCriteria, EvaluationResult
+        
+        print(f"  👥 Jury deliberating on {len(list(EvaluationCriteria))} criteria (parallel)...")
+        
+        # Define async function to evaluate a single criterion
+        async def evaluate_criterion_async(criterion: EvaluationCriteria):
+            """Evaluate a single criterion asynchronously."""
+            try:
+                print(f"    ⚖️  Criterion: {criterion.value}")
+                
+                # Get jury evaluation with individual responses (async)
+                jury_result = await self.jury_evaluator.jury.adeliberate(
+                    self.jury_evaluator._build_evaluation_prompt(
+                        query, response, context_documents, criterion
+                    ),
+                    return_individual_responses=True
+                )
+                
+                # Get judge's final verdict based on jury deliberations (async)
+                judge_verdict = await self.judge_llm.render_final_verdict_async(
+                    criterion=criterion.value,
+                    jury_result=jury_result,
+                    query=query,
+                    response=response,
+                    context=context_documents
+                )
+                
+                print(f"      👨‍⚖️ Judge Verdict: {judge_verdict.final_score:.1f}/10 ({judge_verdict.final_pass_fail}) - Agreement: {judge_verdict.jury_agreement_level}")
+                
+                # Create evaluation result from judge's verdict
+                return criterion.value, EvaluationResult(
+                    criterion=criterion.value,
+                    score=judge_verdict.final_score,
+                    pass_fail=judge_verdict.final_pass_fail,
+                    reasoning=f"[JUDGE VERDICT] {judge_verdict.reasoning}",
+                    confidence=judge_verdict.confidence,
+                    improvement_suggestions=judge_verdict.improvement_suggestions,
+                    individual_scores=None  # Could extract from jury_result if needed
+                )
+            except Exception as e:
+                print(f"      ❌ Error evaluating criterion {criterion.value}: {e}")
+                # Return a default failed result
+                return criterion.value, EvaluationResult(
+                    criterion=criterion.value,
+                    score=0.0,
+                    pass_fail="FAIL",
+                    reasoning=f"Error during evaluation: {str(e)}",
+                    confidence=0.0,
+                    improvement_suggestions="Evaluation failed - check logs",
+                    individual_scores=None
+                )
+        
+        # Evaluate all criteria in parallel
+        criteria = list(EvaluationCriteria)
+        tasks = [evaluate_criterion_async(criterion) for criterion in criteria]
+        criterion_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Build evaluation results dictionary
+        evaluation_results = {}
+        for result in criterion_results:
+            if isinstance(result, Exception):
+                print(f"  ⚠️ Exception in criterion evaluation: {result}")
+                continue
+            criterion_value, eval_result = result
+            evaluation_results[criterion_value] = eval_result
         
         # Calculate overall metrics
         overall_score = self.jury_evaluator._calculate_overall_score(evaluation_results)
