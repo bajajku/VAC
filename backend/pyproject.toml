@@ -28,6 +28,7 @@ dependencies = [
     "guardrails-ai>=0.5.15",
     "langchain-ollama>=0.3.3",
     "pypdf2>=3.0.1",
+    "matplotlib>=3.10.7",
 ]
 
 # Add this section to specify which directories are packages
