@@ -1,5 +1,5 @@
 from guardrails.hub import (
-    ToxicLanguage, DetectJailbreak, ProfanityFree, DetectPII, SensitiveTopic, LlamaGuard7B
+    ToxicLanguage, DetectJailbreak, ProfanityFree, DetectPII, SensitiveTopic, LlamaGuard7B, UnusualPrompt
 )
 
 # OPTIMIZED NON-LLM GUARDRAILS CONFIGURATION
@@ -21,9 +21,9 @@ GUARDRAIL_CONFIG = {
             "threshold": 0.8,
             "on_fail": "exception"
         }),
-        # (UnusualPrompt, {
-        #     "on_fail": "exception"
-        # })
+        (UnusualPrompt, {
+            "on_fail": "exception"
+        })
 
     ],
 
