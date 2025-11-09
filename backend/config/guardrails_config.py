@@ -629,7 +629,6 @@ GUARDRAIL_POLICIES = {
     ],
 
     "military_mental_health_performance_optimized": [
-        "crisis_escalation",
         "prompt_injection_comprehensive",  # Add prompt injection protection
     ],
     
