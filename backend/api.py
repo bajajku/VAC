@@ -594,7 +594,7 @@ async def startup_event():
             "collection_name": "demo_collection",
             "api_key": "token-abc123",
             "chats_by_session_id": {},
-            "input_guardrails": Guardrails().with_policy("maximum_protection"),
+            "input_guardrails": Guardrails().with_policy("military_mental_health_performance_optimized"),
         }
         rag_app.initialize(**config)
 

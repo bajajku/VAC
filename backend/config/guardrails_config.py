@@ -10,7 +10,7 @@ GUARDRAIL_CONFIG = {
     # 🛑 1. Crisis / Escalation Detection (HIGH PRIORITY)
     "crisis_escalation": [
         (LlamaGuard7B, {
-            "policies": ["O6"],
+            "policies": ["O6","01", "02", "03", "04", "05"],
             "on_fail": "exception"
         })
     ],
@@ -83,6 +83,10 @@ GUARDRAIL_POLICIES = {
     "performance_optimized": [
         "crisis_escalation",
         "profanity_hate_harassment"
+    ],
+
+    "military_mental_health_performance_optimized": [
+        "llm_validation",
     ],
     
     # Legacy policies (kept for compatibility)
