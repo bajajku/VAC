@@ -979,3 +979,6 @@ class EvaluationSystem:
 if __name__ == "__main__":
     evaluation_system = EvaluationSystem()
     evaluation_system.main()
+
+
+# TODO: Change the Judge(Logic and Reasoning).
