@@ -864,14 +864,14 @@ class EvaluationSystem:
         
         Args:
             max_iterations: Maximum number of iterations to run
-            early_stop_threshold: Stop if pass rate exceeds this threshold (0-100)
+            early_stop_threshold: (Deprecated - no longer used) All iterations will run
         
         Returns:
             dict: Complete iteration history with best prompt identified
         """
         print("🚀 Starting Multi-Iteration Evaluation Workflow")
         print(f"   Max Iterations: {max_iterations}")
-        print(f"   Early Stop Threshold: {early_stop_threshold}%")
+        print(f"   Running all {max_iterations} iterations (no early stopping)")
         print("=" * 60)
         
         current_prompt = PROMPT_TEMPLATE
@@ -913,17 +913,17 @@ class EvaluationSystem:
                 best_iteration = iteration + 1
                 print(f"   🌟 New best score!")
             
-            # Check early stopping
-            if metrics['pass_rate'] >= early_stop_threshold:
-                print(f"\n✅ Early stopping: Pass rate {metrics['pass_rate']:.1f}% exceeds threshold {early_stop_threshold}%")
-                break
+            # # Check early stopping
+            # if metrics['pass_rate'] >= early_stop_threshold:
+            #     print(f"\n✅ Early stopping: Pass rate {metrics['pass_rate']:.1f}% exceeds threshold {early_stop_threshold}%")
+            #     break
             
-            # Check for performance plateau or degradation
-            if iteration >= 2:
-                trend = self._analyze_trend(self.iteration_history)
-                if trend['plateau_detected']:
-                    print(f"\n⚠️ Performance plateau detected. Stopping early.")
-                    break
+            # # Check for performance plateau or degradation
+            # if iteration >= 2:
+            #     trend = self._analyze_trend(self.iteration_history)
+            #     if trend['plateau_detected']:
+            #         print(f"\n⚠️ Performance plateau detected. Stopping early.")
+            #         break
             
             # Step 4: Generate optimization for next iteration (if not last iteration)
             if iteration < max_iterations - 1:
@@ -1436,7 +1436,7 @@ if __name__ == "__main__":
     parser.add_argument('--iterations', type=int, default=5,
                        help='Maximum number of iterations for multi mode (default: 5)')
     parser.add_argument('--threshold', type=float, default=95.0,
-                       help='Early stop threshold for pass rate (default: 95.0)')
+                       help='(Deprecated - no longer used) All iterations will run regardless of threshold')
     
     args = parser.parse_args()
     
