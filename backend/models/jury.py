@@ -168,13 +168,42 @@ class Jury:
                 print(f"❌ ERROR in {llm.provider}/{llm.model_name}: {e}")
                 print(f"   Error type: {type(e).__name__}")
                 
+                # Enhanced error details for debugging
+                error_details = str(e)
+                
+                # Check for HTTP errors and extract response details
+                if hasattr(e, 'response'):
+                    try:
+                        if hasattr(e.response, 'status_code'):
+                            print(f"   HTTP Status: {e.response.status_code}")
+                        if hasattr(e.response, 'text'):
+                            error_text = e.response.text[:500]
+                            print(f"   Response Text: {error_text}")
+                            error_details += f" | Response: {error_text}"
+                        if hasattr(e.response, 'json'):
+                            try:
+                                error_json = e.response.json()
+                                print(f"   Response JSON: {error_json}")
+                                error_details += f" | JSON: {error_json}"
+                            except:
+                                pass
+                    except Exception as parse_error:
+                        print(f"   Could not parse error response: {parse_error}")
+                
+                # Special handling for 400 Bad Request
+                if "400" in str(e) or "Bad Request" in str(e):
+                    print(f"   ⚠️  400 Bad Request detected for {llm.model_name}")
+                    print(f"   Base URL: {llm.llm.client.base_url if hasattr(llm.llm, 'client') and hasattr(llm.llm.client, 'base_url') else 'N/A'}")
+                    print(f"   Prompt length: {len(prompt)} characters")
+                    print(f"   Prompt preview: {prompt[:200]}...")
+                
                 return {
                     'index': llm_index,
                     'response': None,
                     'provider': llm.provider,
                     'model': llm.model_name,
                     'success': False,
-                    'error': str(e)
+                    'error': error_details
                 }
         
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
