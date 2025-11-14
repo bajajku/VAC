@@ -234,6 +234,8 @@ class EvaluationSystem:
             'initial': [],
             'optimized': []
         }
+        # Store multi-iteration history
+        self.iteration_history = []  # List of {iteration, prompt, results, metrics}
     
     # HELPER FUNCTIONS ------------------------------------------------------------------------------------------------
 
@@ -854,6 +856,453 @@ class EvaluationSystem:
             }
         )
     
+    def run_multi_iteration_workflow(self, max_iterations: int = 5, early_stop_threshold: float = 95.0):
+        """
+        Run multiple iterations of evaluation and optimization.
+        
+        Args:
+            max_iterations: Maximum number of iterations to run
+            early_stop_threshold: Stop if pass rate exceeds this threshold (0-100)
+        
+        Returns:
+            dict: Complete iteration history with best prompt identified
+        """
+        print("🚀 Starting Multi-Iteration Evaluation Workflow")
+        print(f"   Max Iterations: {max_iterations}")
+        print(f"   Early Stop Threshold: {early_stop_threshold}%")
+        print("=" * 60)
+        
+        current_prompt = PROMPT_TEMPLATE
+        best_iteration = None
+        best_score = -1
+        
+        for iteration in range(max_iterations):
+            print(f"\n{'='*80}")
+            print(f"🔄 ITERATION {iteration + 1}/{max_iterations}")
+            print(f"{'='*80}")
+            
+            # Step 1: Evaluate current prompt
+            print(f"\n📊 Evaluating System (Iteration {iteration + 1})")
+            print("-" * 60)
+            results = self.evaluate_system(prompt=current_prompt)
+            
+            # Step 2: Calculate metrics
+            metrics = self._calculate_iteration_metrics(results)
+            
+            # Step 3: Store iteration data
+            iteration_data = {
+                'iteration': iteration + 1,
+                'prompt': current_prompt,
+                'results': results,
+                'metrics': metrics,
+                'prompt_length': len(current_prompt)
+            }
+            self.iteration_history.append(iteration_data)
+            
+            # Display results
+            print(f"\n📈 Iteration {iteration + 1} Results:")
+            print(f"   Overall Score: {metrics['avg_score']:.2f}/10")
+            print(f"   Pass Rate: {metrics['pass_rate']:.1f}%")
+            print(f"   Prompt Length: {len(current_prompt)} chars")
+            
+            # Track best iteration
+            if metrics['avg_score'] > best_score:
+                best_score = metrics['avg_score']
+                best_iteration = iteration + 1
+                print(f"   🌟 New best score!")
+            
+            # Check early stopping
+            if metrics['pass_rate'] >= early_stop_threshold:
+                print(f"\n✅ Early stopping: Pass rate {metrics['pass_rate']:.1f}% exceeds threshold {early_stop_threshold}%")
+                break
+            
+            # Check for performance plateau or degradation
+            if iteration >= 2:
+                trend = self._analyze_trend(self.iteration_history)
+                if trend['plateau_detected']:
+                    print(f"\n⚠️ Performance plateau detected. Stopping early.")
+                    break
+            
+            # Step 4: Generate optimization for next iteration (if not last iteration)
+            if iteration < max_iterations - 1:
+                print(f"\n🔧 Generating Optimized Prompt for Iteration {iteration + 2}")
+                print("-" * 60)
+                
+                try:
+                    optimization_result = self.prompt_optimizer.optimize_prompt_from_evaluation(
+                        current_prompt=current_prompt,
+                        evaluation_report=results[0],
+                        iteration_number=iteration + 1
+                    )
+                    current_prompt = optimization_result.optimized_prompt
+                    
+                    print(f"   Applied {len(optimization_result.applied_suggestions)} suggestions")
+                    print(f"   New prompt length: {len(current_prompt)} chars")
+                except Exception as e:
+                    print(f"   ⚠️ Optimization failed: {e}")
+                    print(f"   Stopping iterations.")
+                    break
+        
+        # Final Analysis
+        print(f"\n{'='*80}")
+        print("📊 MULTI-ITERATION ANALYSIS")
+        print(f"{'='*80}")
+        
+        analysis = self._perform_final_analysis()
+        
+        print(f"\n🏆 Best Performing Iteration: #{analysis['best_iteration']}")
+        print(f"   Score: {analysis['best_score']:.2f}/10")
+        print(f"   Pass Rate: {analysis['best_pass_rate']:.1f}%")
+        
+        print(f"\n📈 Performance Trend: {analysis['trend']}")
+        print(f"   Total Improvement: {analysis['total_improvement']:+.2f} points")
+        print(f"   Peak Iteration: #{analysis['peak_iteration']}")
+        
+        if analysis['degradation_point']:
+            print(f"\n⚠️ Performance degradation detected at iteration #{analysis['degradation_point']}")
+        
+        # Generate comprehensive graphs
+        print(f"\n📊 Generating Multi-Iteration Graphs")
+        print("-" * 60)
+        self._create_multi_iteration_graphs()
+        
+        # Save results
+        print(f"\n💾 Saving Multi-Iteration Results")
+        print("-" * 60)
+        self._save_multi_iteration_results(analysis)
+        
+        print(f"\n✅ Multi-iteration workflow completed!")
+        print(f"📊 Check 'logs/evaluation_graphs/' for visual analysis")
+        print(f"💾 Check 'logs/evaluation_workflows/' for detailed results")
+        
+        return {
+            'iteration_history': self.iteration_history,
+            'analysis': analysis,
+            'best_prompt': self.iteration_history[analysis['best_iteration'] - 1]['prompt']
+        }
+    
+    def _calculate_iteration_metrics(self, results: list) -> dict:
+        """Calculate metrics for a single iteration."""
+        avg_score = sum(r.overall_score for r in results) / len(results)
+        avg_pass_rate = sum(r.pass_rate for r in results) / len(results)
+        
+        # Calculate per-criterion average scores
+        criterion_scores = {}
+        for result in results:
+            for criterion, eval_result in result.evaluation_results.items():
+                if criterion not in criterion_scores:
+                    criterion_scores[criterion] = []
+                criterion_scores[criterion].append(eval_result.score)
+        
+        avg_criterion_scores = {
+            criterion: np.mean(scores) 
+            for criterion, scores in criterion_scores.items()
+        }
+        
+        return {
+            'avg_score': avg_score,
+            'pass_rate': avg_pass_rate,
+            'criterion_scores': avg_criterion_scores,
+            'num_test_cases': len(results)
+        }
+    
+    def _analyze_trend(self, history: list) -> dict:
+        """Analyze performance trend across iterations."""
+        if len(history) < 3:
+            return {'plateau_detected': False, 'trend': 'insufficient_data'}
+        
+        # Get last 3 scores
+        recent_scores = [h['metrics']['avg_score'] for h in history[-3:]]
+        
+        # Check for plateau (< 0.1 point change in last 3 iterations)
+        max_change = max(recent_scores) - min(recent_scores)
+        plateau_detected = max_change < 0.1
+        
+        # Determine trend
+        if recent_scores[-1] > recent_scores[0]:
+            trend = 'improving'
+        elif recent_scores[-1] < recent_scores[0]:
+            trend = 'degrading'
+        else:
+            trend = 'stable'
+        
+        return {
+            'plateau_detected': plateau_detected,
+            'trend': trend,
+            'max_recent_change': max_change
+        }
+    
+    def _perform_final_analysis(self) -> dict:
+        """Perform final analysis on all iterations."""
+        if not self.iteration_history:
+            return {}
+        
+        scores = [h['metrics']['avg_score'] for h in self.iteration_history]
+        pass_rates = [h['metrics']['pass_rate'] for h in self.iteration_history]
+        
+        best_idx = scores.index(max(scores))
+        best_iteration = best_idx + 1
+        
+        # Find degradation point (first iteration where score drops compared to previous)
+        degradation_point = None
+        for i in range(1, len(scores)):
+            if scores[i] < scores[i-1] - 0.5:  # Significant drop (> 0.5 points)
+                degradation_point = i + 1
+                break
+        
+        # Determine overall trend
+        if len(scores) >= 3:
+            if scores[-1] > scores[0] + 0.5:
+                trend = 'Consistent Improvement'
+            elif scores[-1] < scores[0] - 0.5:
+                trend = 'Overall Degradation'
+            elif max(scores) - min(scores) < 0.3:
+                trend = 'Stable/Plateau'
+            else:
+                trend = 'Mixed/Oscillating'
+        else:
+            trend = 'Insufficient Data'
+        
+        return {
+            'best_iteration': best_iteration,
+            'best_score': scores[best_idx],
+            'best_pass_rate': pass_rates[best_idx],
+            'peak_iteration': best_iteration,
+            'degradation_point': degradation_point,
+            'trend': trend,
+            'total_improvement': scores[-1] - scores[0],
+            'total_iterations': len(self.iteration_history)
+        }
+    
+    def _create_multi_iteration_graphs(self, save_path: str = "logs/evaluation_graphs"):
+        """Create comprehensive graphs for multi-iteration analysis."""
+        from pathlib import Path
+        from datetime import datetime
+        
+        Path(save_path).mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Graph 1: Score progression across iterations
+        self._create_iteration_progression_graph(
+            f"{save_path}/iteration_progression_{timestamp}.png"
+        )
+        
+        # Graph 2: Per-criterion trends across iterations
+        self._create_criterion_trends_graph(
+            f"{save_path}/criterion_trends_{timestamp}.png"
+        )
+        
+        # Graph 3: Pass rate evolution
+        self._create_pass_rate_evolution_graph(
+            f"{save_path}/pass_rate_evolution_{timestamp}.png"
+        )
+        
+        # Graph 4: Prompt length vs performance
+        self._create_prompt_length_analysis_graph(
+            f"{save_path}/prompt_analysis_{timestamp}.png"
+        )
+        
+        print(f"✅ Generated 4 multi-iteration graphs in {save_path}")
+    
+    def _create_iteration_progression_graph(self, filename: str):
+        """Create graph showing score progression across iterations."""
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        iterations = [h['iteration'] for h in self.iteration_history]
+        scores = [h['metrics']['avg_score'] for h in self.iteration_history]
+        pass_rates = [h['metrics']['pass_rate'] / 10 for h in self.iteration_history]  # Scale to 0-10
+        
+        # Plot scores
+        line1 = ax.plot(iterations, scores, marker='o', linewidth=2.5, markersize=10,
+                       color='#4ECDC4', label='Overall Score', alpha=0.8)
+        
+        # Plot pass rates (scaled)
+        ax2 = ax.twinx()
+        line2 = ax2.plot(iterations, [pr * 10 for pr in pass_rates], marker='s', linewidth=2.5, 
+                        markersize=8, color='#FF6B6B', label='Pass Rate (%)', alpha=0.8)
+        
+        # Highlight best iteration
+        best_idx = scores.index(max(scores))
+        ax.scatter([iterations[best_idx]], [scores[best_idx]], s=300, 
+                  color='gold', marker='*', zorder=5, label='Best Iteration')
+        
+        # Labels and formatting
+        ax.set_xlabel('Iteration Number', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Overall Score (0-10)', fontsize=13, fontweight='bold', color='#4ECDC4')
+        ax2.set_ylabel('Pass Rate (%)', fontsize=13, fontweight='bold', color='#FF6B6B')
+        ax.set_title('Performance Progression Across Iterations', fontsize=15, fontweight='bold', pad=20)
+        
+        ax.tick_params(axis='y', labelcolor='#4ECDC4')
+        ax2.tick_params(axis='y', labelcolor='#FF6B6B')
+        
+        ax.set_ylim([0, 10])
+        ax2.set_ylim([0, 100])
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Combined legend
+        lines = line1 + line2
+        labels = [l.get_label() for l in lines] + ['Best Iteration']
+        ax.legend(lines + [ax.collections[-1]], labels, loc='lower right', fontsize=10)
+        
+        # Annotate scores
+        for i, (it, score) in enumerate(zip(iterations, scores)):
+            ax.annotate(f'{score:.2f}', (it, score), textcoords="offset points",
+                       xytext=(0, 10), ha='center', fontsize=9, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _create_criterion_trends_graph(self, filename: str):
+        """Create graph showing per-criterion trends across iterations."""
+        fig, ax = plt.subplots(figsize=(14, 8))
+        
+        iterations = [h['iteration'] for h in self.iteration_history]
+        
+        # Get all unique criteria
+        all_criteria = set()
+        for h in self.iteration_history:
+            all_criteria.update(h['metrics']['criterion_scores'].keys())
+        all_criteria = sorted(list(all_criteria))
+        
+        # Plot each criterion
+        colors = plt.cm.tab10(np.linspace(0, 1, len(all_criteria)))
+        
+        for criterion, color in zip(all_criteria, colors):
+            scores = []
+            for h in self.iteration_history:
+                score = h['metrics']['criterion_scores'].get(criterion, 0)
+                scores.append(score)
+            
+            ax.plot(iterations, scores, marker='o', linewidth=2, markersize=6,
+                   label=criterion.replace('_', ' ').title(), alpha=0.7, color=color)
+        
+        ax.set_xlabel('Iteration Number', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Score (0-10)', fontsize=12, fontweight='bold')
+        ax.set_title('Per-Criterion Performance Trends', fontsize=14, fontweight='bold')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim([0, 10])
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _create_pass_rate_evolution_graph(self, filename: str):
+        """Create graph showing pass rate evolution."""
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        iterations = [h['iteration'] for h in self.iteration_history]
+        pass_rates = [h['metrics']['pass_rate'] for h in self.iteration_history]
+        
+        # Bar chart
+        colors = ['#2ECC71' if pr >= 70 else '#F39C12' if pr >= 50 else '#E74C3C' 
+                 for pr in pass_rates]
+        bars = ax.bar(iterations, pass_rates, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        
+        # Add threshold line
+        ax.axhline(y=70, color='green', linestyle='--', linewidth=2, alpha=0.5, label='Target (70%)')
+        
+        # Labels
+        ax.set_xlabel('Iteration Number', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Pass Rate (%)', fontsize=13, fontweight='bold')
+        ax.set_title('Pass Rate Evolution Across Iterations', fontsize=15, fontweight='bold')
+        ax.set_ylim([0, 100])
+        ax.legend()
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Annotate values
+        for bar, pr in zip(bars, pass_rates):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{pr:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _create_prompt_length_analysis_graph(self, filename: str):
+        """Create scatter plot analyzing prompt length vs performance."""
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        prompt_lengths = [h['prompt_length'] for h in self.iteration_history]
+        scores = [h['metrics']['avg_score'] for h in self.iteration_history]
+        iterations = [h['iteration'] for h in self.iteration_history]
+        
+        # Scatter plot with color gradient
+        scatter = ax.scatter(prompt_lengths, scores, c=iterations, s=200, 
+                           cmap='viridis', alpha=0.7, edgecolors='black', linewidth=2)
+        
+        # Add iteration labels
+        for i, (length, score, iteration) in enumerate(zip(prompt_lengths, scores, iterations)):
+            ax.annotate(f'#{iteration}', (length, score), fontsize=9, 
+                       ha='center', va='center', fontweight='bold', color='white')
+        
+        # Colorbar
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Iteration Number', fontsize=11, fontweight='bold')
+        
+        ax.set_xlabel('Prompt Length (characters)', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Overall Score (0-10)', fontsize=13, fontweight='bold')
+        ax.set_title('Prompt Length vs Performance Analysis', fontsize=15, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim([0, 10])
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _save_multi_iteration_results(self, analysis: dict):
+        """Save multi-iteration results to file."""
+        from datetime import datetime
+        import json
+        from pathlib import Path
+        
+        Path("logs/evaluation_workflows").mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Prepare data
+        workflow_data = {
+            'timestamp': timestamp,
+            'analysis': analysis,
+            'iterations': []
+        }
+        
+        for h in self.iteration_history:
+            iteration_summary = {
+                'iteration': h['iteration'],
+                'metrics': h['metrics'],
+                'prompt_length': h['prompt_length'],
+                'prompt': h['prompt'][:500] + '...' if len(h['prompt']) > 500 else h['prompt'],
+                'results_summary': [
+                    {
+                        'query': r.query[:100],
+                        'overall_score': r.overall_score,
+                        'pass_rate': r.pass_rate
+                    }
+                    for r in h['results']
+                ]
+            }
+            workflow_data['iterations'].append(iteration_summary)
+        
+        # Save
+        filename = f"logs/evaluation_workflows/multi_iteration_workflow_{timestamp}.json"
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(workflow_data, f, indent=2, ensure_ascii=False, default=str)
+        
+        # Save best prompt separately
+        best_prompt_file = f"logs/evaluation_workflows/best_prompt_{timestamp}.txt"
+        best_prompt = self.iteration_history[analysis['best_iteration'] - 1]['prompt']
+        with open(best_prompt_file, 'w', encoding='utf-8') as f:
+            f.write(f"# Best Prompt from Iteration {analysis['best_iteration']}\n")
+            f.write(f"# Score: {analysis['best_score']:.2f}/10\n")
+            f.write(f"# Pass Rate: {analysis['best_pass_rate']:.1f}%\n")
+            f.write(f"# Timestamp: {timestamp}\n\n")
+            f.write(best_prompt)
+        
+        print(f"💾 Saved multi-iteration results to {filename}")
+        print(f"💾 Saved best prompt to {best_prompt_file}")
+
     def main(self):
         """Run the complete evaluation and optimization workflow with Judge and Graphing."""
         print("🚀 Starting Evaluation System Workflow")
@@ -977,8 +1426,39 @@ class EvaluationSystem:
 
 # For testing the workflow
 if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='RAG Evaluation System')
+    parser.add_argument('--mode', type=str, default='multi', choices=['single', 'multi'],
+                       help='Evaluation mode: single (1 iteration) or multi (multiple iterations)')
+    parser.add_argument('--iterations', type=int, default=5,
+                       help='Maximum number of iterations for multi mode (default: 5)')
+    parser.add_argument('--threshold', type=float, default=95.0,
+                       help='Early stop threshold for pass rate (default: 95.0)')
+    
+    args = parser.parse_args()
+    
     evaluation_system = EvaluationSystem()
-    evaluation_system.main()
+    
+    if args.mode == 'multi':
+        print(f"🔄 Running MULTI-ITERATION mode (max {args.iterations} iterations)")
+        result = evaluation_system.run_multi_iteration_workflow(
+            max_iterations=args.iterations,
+            early_stop_threshold=args.threshold
+        )
+        
+        # Display final summary
+        print("\n" + "="*80)
+        print("🏆 FINAL SUMMARY")
+        print("="*80)
+        print(f"Best Iteration: #{result['analysis']['best_iteration']}")
+        print(f"Best Score: {result['analysis']['best_score']:.2f}/10")
+        print(f"Total Improvement: {result['analysis']['total_improvement']:+.2f} points")
+        print(f"Trend: {result['analysis']['trend']}")
+        
+    else:
+        print("🔄 Running SINGLE-ITERATION mode")
+        evaluation_system.main()
 
 
 # TODO: Change the Judge(Logic and Reasoning).
