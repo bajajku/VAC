@@ -493,9 +493,9 @@ class EvaluationSystem:
     def initialize_evaluation_system(self):
         """Initialize the evaluation system."""
         jury_evaluator_configs = [
-            {'provider': 'chatopenai', 'model_name': 'meta-llama/Llama-3.1-8B-Instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1"},
+            {'provider': 'chatopenai', 'model_name': 'ibm-granite/granite-3.3-8b-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8000/v1"},
             {'provider': 'chatopenai', 'model_name': 'openai/gpt-oss-20b', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8001/v1"},
-            {'provider': 'chatopenai', 'model_name': 'meta-llama/Llama-3.1-8B-Instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1"},
+            {'provider': 'chatopenai', 'model_name': 'Zyphra/Zamba2-7B-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1"},
         ]
         jury_evaluator = create_rag_evaluator(jury_evaluator_configs)
         print(f"✅ Initialized jury evaluator with {len(jury_evaluator_configs)} jury members")
@@ -505,8 +505,9 @@ class EvaluationSystem:
         """Initialize the Judge LLM for final verdicts."""
         judge_llm = LLM(
             provider='chatopenai',
-            model_name='Qwen/Qwen2.5-14B-Instruct',
-            api_key="token-abc123"
+            model_name='meta-llama/Meta-Llama-3-70B-Instruct',
+            api_key="EMPTY",
+            base_url="http://100.96.237.56:8003/v1"
         )
         judge = JudgeLLM(judge_llm)
         return judge
