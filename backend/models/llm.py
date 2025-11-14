@@ -207,12 +207,14 @@ class ChatOpenAILLM(BaseLLM):
         super().__init__(model_name, **kwargs)
 
     def create_llm(self):
+        # Allow streaming to be configured, default to True for backward compatibility
+        streaming = self.config.get('streaming', True)
         return ChatOpenAI(
             base_url=self.config['base_url'] if 'base_url' in self.config else "http://localhost:8080/v1",
             model=self.model_name,
             api_key=self.api_key,
-            streaming=True,
-            **{k: v for k, v in self.config.items() if k not in ['model', 'base_url']}
+            streaming=streaming,
+            **{k: v for k, v in self.config.items() if k not in ['model', 'base_url', 'streaming']}
         )
 
 class LLMFactory:   
