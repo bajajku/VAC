@@ -495,7 +495,8 @@ class EvaluationSystem:
         jury_evaluator_configs = [
             {'provider': 'chatopenai', 'model_name': 'ibm-granite/granite-3.3-8b-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8000/v1"},
             {'provider': 'chatopenai', 'model_name': 'openai/gpt-oss-20b', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8001/v1"},
-            {'provider': 'chatopenai', 'model_name': 'Zyphra/Zamba2-7B-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1"},
+            # Port 8002 doesn't accept streaming requests, so disable streaming
+            {'provider': 'chatopenai', 'model_name': 'Zyphra/Zamba2-7B-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1", "streaming": False},
         ]
         jury_evaluator = create_rag_evaluator(jury_evaluator_configs)
         print(f"✅ Initialized jury evaluator with {len(jury_evaluator_configs)} jury members")
