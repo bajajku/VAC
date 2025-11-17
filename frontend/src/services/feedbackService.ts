@@ -16,12 +16,16 @@ type FeedbackCreate = {
   hallucination?: number;
   noise_robustness?: number;
   negative_rejection?: number;
+  information_integration?: number;
+  counterfactual_robustness?: number;
   privacy_breach?: number;
   malicious_use?: number;
   security_breach?: number;
   out_of_domain?: number;
   completeness?: number;
   brand_damage?: number;
+  empathy?: number;
+  sensitivity?: number;
   
   // Additional feedback fields
   vote?: string;
@@ -44,12 +48,16 @@ type FeedbackResponse = {
   hallucination?: number;
   noise_robustness?: number;
   negative_rejection?: number;
+  information_integration?: number;
+  counterfactual_robustness?: number;
   privacy_breach?: number;
   malicious_use?: number;
   security_breach?: number;
   out_of_domain?: number;
   completeness?: number;
   brand_damage?: number;
+  empathy?: number;
+  sensitivity?: number;
   
   vote?: string;
   comment?: string;
@@ -88,12 +96,16 @@ type LegacyFeedbackData = {
   hallucination?: number;
   noise_robustness?: number;
   negative_rejection?: number;
+  information_integration?: number;
+  counterfactual_robustness?: number;
   privacy_breach?: number;
   malicious_use?: number;
   security_breach?: number;
   out_of_domain?: number;
   completeness?: number;
   brand_damage?: number;
+  empathy?: number;
+  sensitivity?: number;
   
   vote: 'like' | 'dislike' | null;
   comment: string;
@@ -267,12 +279,16 @@ class FeedbackService {
         hallucination: feedback.hallucination && feedback.hallucination > 0 ? feedback.hallucination : undefined,
         noise_robustness: feedback.noise_robustness && feedback.noise_robustness > 0 ? feedback.noise_robustness : undefined,
         negative_rejection: feedback.negative_rejection && feedback.negative_rejection > 0 ? feedback.negative_rejection : undefined,
+        information_integration: feedback.information_integration && feedback.information_integration > 0 ? feedback.information_integration : undefined,
+        counterfactual_robustness: feedback.counterfactual_robustness && feedback.counterfactual_robustness > 0 ? feedback.counterfactual_robustness : undefined,
         privacy_breach: feedback.privacy_breach && feedback.privacy_breach > 0 ? feedback.privacy_breach : undefined,
         malicious_use: feedback.malicious_use && feedback.malicious_use > 0 ? feedback.malicious_use : undefined,
         security_breach: feedback.security_breach && feedback.security_breach > 0 ? feedback.security_breach : undefined,
         out_of_domain: feedback.out_of_domain && feedback.out_of_domain > 0 ? feedback.out_of_domain : undefined,
         completeness: feedback.completeness && feedback.completeness > 0 ? feedback.completeness : undefined,
         brand_damage: feedback.brand_damage && feedback.brand_damage > 0 ? feedback.brand_damage : undefined,
+        empathy: feedback.empathy && feedback.empathy > 0 ? feedback.empathy : undefined,
+        sensitivity: feedback.sensitivity && feedback.sensitivity > 0 ? feedback.sensitivity : undefined,
         
         // Additional fields
         vote: feedback.vote || undefined,
@@ -314,12 +330,16 @@ class FeedbackService {
           hallucination: feedback.hallucination,
           noise_robustness: feedback.noise_robustness,
           negative_rejection: feedback.negative_rejection,
+          information_integration: feedback.information_integration,
+          counterfactual_robustness: feedback.counterfactual_robustness,
           privacy_breach: feedback.privacy_breach,
           malicious_use: feedback.malicious_use,
           security_breach: feedback.security_breach,
           out_of_domain: feedback.out_of_domain,
           completeness: feedback.completeness,
           brand_damage: feedback.brand_damage,
+          empathy: feedback.empathy,
+          sensitivity: feedback.sensitivity,
           
           accuracy: undefined, // Not available in new format
           helpfulness: undefined, // Not available in new format

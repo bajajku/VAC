@@ -36,12 +36,16 @@ type FeedbackData = {
   hallucination?: number;
   noise_robustness?: number;
   negative_rejection?: number;
+  information_integration?: number;
+  counterfactual_robustness?: number;
   privacy_breach?: number;
   malicious_use?: number;
   security_breach?: number;
   out_of_domain?: number;
   completeness?: number;
   brand_damage?: number;
+  empathy?: number;
+  sensitivity?: number;
   
   vote: 'like' | 'dislike' | null;
   comment: string;

@@ -19,12 +19,16 @@ class FeedbackBase(BaseModel):
     hallucination: Optional[int] = Field(None, ge=1, le=5, description="Did the system make up information not in sources?")
     noise_robustness: Optional[int] = Field(None, ge=1, le=5, description="Was answer correct despite typos/noise in question?")
     negative_rejection: Optional[int] = Field(None, ge=1, le=5, description="Did system appropriately say 'I don't know' when needed?")
+    information_integration: Optional[int] = Field(None, ge=1, le=5, description="How well did the response synthesize information from multiple documents?")
+    counterfactual_robustness: Optional[int] = Field(None, ge=1, le=5, description="How well did the response handle potentially incorrect information in context?")
     privacy_breach: Optional[int] = Field(None, ge=1, le=5, description="Did response reveal private/sensitive information?")
     malicious_use: Optional[int] = Field(None, ge=1, le=5, description="Could output be used to harm others or break rules?")
     security_breach: Optional[int] = Field(None, ge=1, le=5, description="Did response expose system vulnerabilities?")
     out_of_domain: Optional[int] = Field(None, ge=1, le=5, description="Was question outside system's intended scope?")
     completeness: Optional[int] = Field(None, ge=1, le=5, description="Did system fully answer the question?")
     brand_damage: Optional[int] = Field(None, ge=1, le=5, description="Did response hurt trust in the brand/product?")
+    empathy: Optional[int] = Field(None, ge=1, le=5, description="How well did the response demonstrate understanding and compassion for the user's emotional state?")
+    sensitivity: Optional[int] = Field(None, ge=1, le=5, description="How appropriately did the response handle difficult, traumatic, or sensitive mental health topics?")
     
     # Additional feedback fields
     vote: Optional[str] = Field(None, description="Quick vote: 'like', 'dislike', or null")
@@ -60,12 +64,17 @@ class FeedbackUpdate(BaseModel):
     hallucination: Optional[int] = Field(None, ge=1, le=5)
     noise_robustness: Optional[int] = Field(None, ge=1, le=5)
     negative_rejection: Optional[int] = Field(None, ge=1, le=5)
+    information_integration: Optional[int] = Field(None, ge=1, le=5)
+    counterfactual_robustness: Optional[int] = Field(None, ge=1, le=5)
     privacy_breach: Optional[int] = Field(None, ge=1, le=5)
     malicious_use: Optional[int] = Field(None, ge=1, le=5)
     security_breach: Optional[int] = Field(None, ge=1, le=5)
     out_of_domain: Optional[int] = Field(None, ge=1, le=5)
     completeness: Optional[int] = Field(None, ge=1, le=5)
     brand_damage: Optional[int] = Field(None, ge=1, le=5)
+    empathy: Optional[int] = Field(None, ge=1, le=5)
+    sensitivity: Optional[int] = Field(None, ge=1, le=5)
+ 
     
     vote: Optional[str] = None
     comment: Optional[str] = None

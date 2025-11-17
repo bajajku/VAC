@@ -102,12 +102,16 @@ class FeedbackRequest(BaseModel):
     hallucination: Optional[int] = None
     noise_robustness: Optional[int] = None
     negative_rejection: Optional[int] = None
+    information_integration: Optional[int] = None
+    counterfactual_robustness: Optional[int] = None
     privacy_breach: Optional[int] = None
     malicious_use: Optional[int] = None
     security_breach: Optional[int] = None
     out_of_domain: Optional[int] = None
     completeness: Optional[int] = None
     brand_damage: Optional[int] = None
+    empathy: Optional[int] = None
+    sensitivity: Optional[int] = None
     
     # Additional feedback fields
     vote: Optional[str] = None
@@ -1127,12 +1131,16 @@ async def create_feedback(request: FeedbackRequest):
             hallucination=request.hallucination,
             noise_robustness=request.noise_robustness,
             negative_rejection=request.negative_rejection,
+            information_integration=request.information_integration,
+            counterfactual_robustness=request.counterfactual_robustness,
             privacy_breach=request.privacy_breach,
             malicious_use=request.malicious_use,
             security_breach=request.security_breach,
             out_of_domain=request.out_of_domain,
             completeness=request.completeness,
             brand_damage=request.brand_damage,
+            empathy=request.empathy,
+            sensitivity=request.sensitivity,
             
             # Pass additional feedback fields
             vote=request.vote,

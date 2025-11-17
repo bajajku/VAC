@@ -13,12 +13,16 @@ type FeedbackData = {
   hallucination?: number; // 1-5 stars, optional
   noise_robustness?: number; // 1-5 stars, optional
   negative_rejection?: number; // 1-5 stars, optional
+  information_integration?: number; // 1-5 stars, optional
+  counterfactual_robustness?: number; // 1-5 stars, optional
   privacy_breach?: number; // 1-5 stars, optional
   malicious_use?: number; // 1-5 stars, optional
   security_breach?: number; // 1-5 stars, optional
   out_of_domain?: number; // 1-5 stars, optional
   completeness?: number; // 1-5 stars, optional
   brand_damage?: number; // 1-5 stars, optional
+  empathy?: number; // 1-5 stars, optional
+  sensitivity?: number; // 1-5 stars, optional
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
@@ -114,12 +118,16 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
     hallucination: undefined,
     noise_robustness: undefined,
     negative_rejection: undefined,
+    information_integration: undefined,
+    counterfactual_robustness: undefined,
     privacy_breach: undefined,
     malicious_use: undefined,
     security_breach: undefined,
     out_of_domain: undefined,
     completeness: undefined,
     brand_damage: undefined,
+    empathy: undefined,
+    sensitivity: undefined,
     vote: null,
     comment: '',
     expertNotes: '',
@@ -131,12 +139,16 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
                           (feedback.hallucination && feedback.hallucination > 0) ||
                           (feedback.noise_robustness && feedback.noise_robustness > 0) ||
                           (feedback.negative_rejection && feedback.negative_rejection > 0) ||
+                          (feedback.information_integration && feedback.information_integration > 0) ||
+                          (feedback.counterfactual_robustness && feedback.counterfactual_robustness > 0) ||
                           (feedback.privacy_breach && feedback.privacy_breach > 0) ||
                           (feedback.malicious_use && feedback.malicious_use > 0) ||
                           (feedback.security_breach && feedback.security_breach > 0) ||
                           (feedback.out_of_domain && feedback.out_of_domain > 0) ||
                           (feedback.completeness && feedback.completeness > 0) ||
-                          (feedback.brand_damage && feedback.brand_damage > 0);
+                          (feedback.brand_damage && feedback.brand_damage > 0) ||
+                          (feedback.empathy && feedback.empathy > 0) ||
+                          (feedback.sensitivity && feedback.sensitivity > 0);
 
     if (!hasValidRating && !feedback.vote && !feedback.comment && !feedback.expertNotes) {
       alert('Please provide at least one rating (1-5 stars), vote, or comment before submitting.');
@@ -151,10 +163,16 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
       hallucination: feedback.hallucination,
       noise_robustness: feedback.noise_robustness,
       negative_rejection: feedback.negative_rejection,
+      information_integration: feedback.information_integration,
+      counterfactual_robustness: feedback.counterfactual_robustness,
       privacy_breach: feedback.privacy_breach,
       malicious_use: feedback.malicious_use,
       security_breach: feedback.security_breach,
       out_of_domain: feedback.out_of_domain,
+      completeness: feedback.completeness,
+      brand_damage: feedback.brand_damage,
+      empathy: feedback.empathy,
+      sensitivity: feedback.sensitivity,
       vote: feedback.vote || null,
       comment: feedback.comment || '',
       expertNotes: feedback.expertNotes || '',
@@ -174,10 +192,16 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
                           (feedback.hallucination && feedback.hallucination > 0) ||
                           (feedback.noise_robustness && feedback.noise_robustness > 0) ||
                           (feedback.negative_rejection && feedback.negative_rejection > 0) ||
+                          (feedback.information_integration && feedback.information_integration > 0) ||
+                          (feedback.counterfactual_robustness && feedback.counterfactual_robustness > 0) ||
                           (feedback.privacy_breach && feedback.privacy_breach > 0) ||
                           (feedback.malicious_use && feedback.malicious_use > 0) ||
                           (feedback.security_breach && feedback.security_breach > 0) ||
                           (feedback.out_of_domain && feedback.out_of_domain > 0) ||
+                          (feedback.completeness && feedback.completeness > 0) ||
+                          (feedback.brand_damage && feedback.brand_damage > 0) ||
+                          (feedback.empathy && feedback.empathy > 0) ||
+                          (feedback.sensitivity && feedback.sensitivity > 0) ||
                           feedback.vote !== null ||
                           (feedback.comment && feedback.comment.trim() !== '') ||
                           (feedback.expertNotes && feedback.expertNotes.trim() !== '');
@@ -302,7 +326,19 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
           rating={feedback.negative_rejection}
           onRating={(rating) => updateFeedback('negative_rejection', rating)}
           label="Negative Rejection"
-          info="Did the system appropriately say “I don’t know” when it should have?"
+          info="Did the system appropriately say ''I don't know'' when it should have?"
+        />
+        <StarRating
+          rating={feedback.information_integration}
+          onRating={(rating) => updateFeedback('information_integration', rating)}
+          label="Information Integration"
+          info="How well did the response synthesize information from multiple documents?"
+        />
+        <StarRating
+          rating={feedback.counterfactual_robustness}
+          onRating={(rating) => updateFeedback('counterfactual_robustness', rating)}
+          label="Counterfactual Robustness"
+          info="How well did the response handle potentially incorrect information in context?"
         />
         <StarRating
           rating={feedback.privacy_breach}
@@ -339,6 +375,18 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
           onRating={(rating) => updateFeedback('brand_damage', rating)}
           label="Brand Damage"
           info="Did the response hurt trust in the product, company, or brand it represents?"
+        />
+        <StarRating
+          rating={feedback.empathy}
+          onRating={(rating) => updateFeedback('empathy', rating)}
+          label="Empathy"
+          info="How well did the response demonstrate understanding and compassion for the user's emotional state?"
+        />
+        <StarRating
+          rating={feedback.sensitivity}
+          onRating={(rating) => updateFeedback('sensitivity', rating)}
+          label="Sensitivity"
+          info="How appropriately did the response handle difficult, traumatic, or sensitive mental health topics?"
         />
       </div>
 
