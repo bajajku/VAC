@@ -52,6 +52,11 @@ class SystemPromptOptimizer:
         self.log_dir = Path(kwargs.get('log_dir', 'logs/prompt_optimization'))
         self.log_dir.mkdir(parents=True, exist_ok=True)
         
+        # Fixed template footer that should never be modified
+        self.fixed_template_footer = """Given the following context and question, provide a helpful response:
+Context: {context}
+Question: {input}"""
+        
         print(f"✅ System Prompt Optimizer initialized")
     
     def optimize_prompt_from_evaluation(self, 
@@ -73,17 +78,27 @@ class SystemPromptOptimizer:
         print(f"   Current pass rate: {evaluation_report.pass_rate:.1f}%")
         print(f"   Failed criteria: {len([r for r in evaluation_report.evaluation_results.values() if r.pass_fail == 'FAIL'])}")
         
-        # Create optimization prompt
+        # Split current prompt into optimizable and fixed sections
+        optimizable_section, _ = self._split_prompt(current_prompt)
+        
+        # Create optimization prompt (only optimizable section is passed to LLM)
         optimization_prompt = self._build_optimization_prompt(
-            current_prompt, evaluation_report
+            optimizable_section, evaluation_report
         )
         
         # Get optimized prompt from LLM
         chat = self.optimizer_llm.create_chat()
         response = chat.invoke(optimization_prompt)
         
-        # Parse the optimization response
-        optimized_prompt, reasoning = self._parse_optimization_response(response.content)
+        # Parse the optimization response (only optimizable section)
+        optimized_section, reasoning = self._parse_optimization_response(response.content)
+        
+        # Reassemble: optimized section + fixed footer
+        optimized_prompt = self._reassemble_prompt(optimized_section)
+        
+        # Validate the final prompt structure
+        if not self._validate_prompt_structure(optimized_prompt):
+            print(f"   ⚠️ Warning: Optimized prompt structure validation failed, but proceeding anyway")
         
         # Create result
         result = PromptOptimizationResult(
@@ -150,11 +165,88 @@ class SystemPromptOptimizer:
         print(f"\n✅ Iterative optimization complete after {len(optimization_results)} iterations")
         return optimization_results
     
-    def _build_optimization_prompt(self, 
-                                 current_prompt: str, 
-                                 evaluation_report: RAGEvaluationReport) -> str:
-        """Build the prompt for the optimization LLM."""
+    def _split_prompt(self, prompt: str) -> Tuple[str, str]:
+        """
+        Split prompt into optimizable section and fixed template footer.
         
+        Args:
+            prompt: The full prompt to split
+            
+        Returns:
+            Tuple of (optimizable_section, fixed_footer)
+        """
+        # Look for the fixed footer pattern
+        # The footer starts with "Given the following context and question..."
+        footer_pattern = r'Given the following context and question.*?Question:\s*\{input\}'
+        match = re.search(footer_pattern, prompt, re.DOTALL | re.IGNORECASE)
+        
+        if match:
+            # Split at the footer
+            optimizable_section = prompt[:match.start()].rstrip()
+            fixed_footer = match.group(0).strip()
+        else:
+            # If footer not found, try to find just the template variable lines
+            # Look for lines containing {context} and {input}
+            lines = prompt.split('\n')
+            footer_start_idx = None
+            
+            for i, line in enumerate(lines):
+                if '{context}' in line or '{input}' in line:
+                    # Check if this is the start of the footer section
+                    # Usually preceded by "Given the following..." or similar
+                    if i > 0 and ('Given' in lines[i-1] or 'context' in lines[i-1].lower() or 'question' in lines[i-1].lower()):
+                        footer_start_idx = i - 1
+                        break
+                    elif '{context}' in line:
+                        footer_start_idx = i
+                        break
+            
+            if footer_start_idx is not None:
+                optimizable_section = '\n'.join(lines[:footer_start_idx]).rstrip()
+                fixed_footer = '\n'.join(lines[footer_start_idx:]).strip()
+            else:
+                # Fallback: assume everything is optimizable except the last 3 lines
+                lines = prompt.split('\n')
+                if len(lines) >= 3:
+                    optimizable_section = '\n'.join(lines[:-3]).rstrip()
+                    fixed_footer = '\n'.join(lines[-3:]).strip()
+                else:
+                    # Very short prompt, assume all is optimizable
+                    optimizable_section = prompt.rstrip()
+                    fixed_footer = self.fixed_template_footer
+        
+        return optimizable_section, fixed_footer
+    
+    def _reassemble_prompt(self, optimizable_section: str) -> str:
+        """
+        Reassemble prompt from optimized section and fixed footer.
+        
+        Args:
+            optimizable_section: The optimized instructions/guidelines section
+            
+        Returns:
+            Complete prompt with fixed footer appended
+        """
+        # Clean up the optimizable section (remove any trailing template footer if LLM added it)
+        optimizable_section = optimizable_section.rstrip()
+        
+        # Remove the fixed footer if LLM accidentally included it
+        footer_pattern = r'Given the following context and question.*?Question:\s*\{input\}'
+        optimizable_section = re.sub(footer_pattern, '', optimizable_section, flags=re.DOTALL | re.IGNORECASE).rstrip()
+        
+        # Reassemble: optimizable section + blank line + fixed footer
+        return f"{optimizable_section}\n\n{self.fixed_template_footer}"
+    
+    def _build_optimization_prompt(self, 
+                                 optimizable_section: str, 
+                                 evaluation_report: RAGEvaluationReport) -> str:
+        """
+        Build the prompt for the optimization LLM.
+        
+        Args:
+            optimizable_section: The instructions/guidelines section to optimize (no template variables)
+            evaluation_report: Evaluation results with improvement suggestions
+        """
         # Analyze failed criteria
         failed_criteria = [
             (name, result) for name, result in evaluation_report.evaluation_results.items() 
@@ -170,10 +262,10 @@ class SystemPromptOptimizer:
             f"- {suggestion}" for suggestion in evaluation_report.aggregated_improvements
         ])
         
-        return f"""You are a system prompt optimization expert. Your task is to improve a RAG system's prompt based on evaluation feedback.
+        return f"""You are a system prompt optimization expert. Your task is to improve the instructions and guidelines section of a RAG system's prompt based on evaluation feedback.
 
-CURRENT SYSTEM PROMPT:
-{current_prompt}
+CURRENT INSTRUCTIONS/GUIDELINES SECTION:
+{optimizable_section}
 
 EVALUATION RESULTS:
 - Overall Score: {evaluation_report.overall_score}/10
@@ -187,149 +279,101 @@ IMPROVEMENT SUGGESTIONS:
 {improvement_suggestions}
 
 OPTIMIZATION TASK:
-1. Analyze the current prompt and identify areas that need improvement based on the failed criteria
-2. Apply the improvement suggestions to create an optimized version
-3. Maintain the core functionality and structure of the prompt
-4. Focus on addressing the specific failures while preserving what's working well
+1. Analyze the instructions/guidelines section above
+2. Apply the improvement suggestions to optimize this section
+3. You can ADD, REMOVE, or MODIFY lines in the instructions/guidelines
+4. Focus on addressing the specific failed criteria (empathy, sensitivity, safety, etc.)
+5. Maintain the trauma-informed and military-focused approach
+6. Make targeted improvements - optimization can mean removing unnecessary lines too
+7. Keep the same general structure (Guidelines, Key Principles, Remember sections)
+8. Ensure the optimized section remains clear and actionable
 
 RESPONSE FORMAT:
 Provide your response in this exact format:
 
 OPTIMIZATION_REASONING:
-[Explain your analysis of the current prompt, which suggestions you're applying, and why]
+[Explain your analysis, which suggestions you're applying, and why. Note any lines you're removing and why.]
 
-OPTIMIZED_PROMPT:
-[The complete optimized system prompt - include everything, don't just show changes]
-
-CRITICAL REQUIREMENTS:
-- **MUST PRESERVE** the template variables exactly as they appear: {{context}} and {{input}}
-- The optimized prompt MUST include these lines exactly:
-  Context: {{context}}
-  Question: {{input}}
-- Any other text with curly braces that is NOT a template variable must be escaped with double curly braces (e.g., if the text contains curly braces for emphasis or examples, double them so they're treated as literal text, not template variables)
-- Keep the same general structure and core instructions
-- Address the specific failed criteria (empathy, sensitivity, safety, etc.)
-- Maintain the trauma-informed and military-focused approach
-- Preserve tool usage requirements and formatting rules
-- Make targeted improvements without completely rewriting
-- Ensure the prompt remains clear and actionable
-
-IMPORTANT: The optimized prompt MUST be a valid LangChain template with {{context}} and {{input}} as the only template variables."""
+OPTIMIZED_INSTRUCTIONS:
+[The optimized instructions/guidelines section - return only this section, nothing else]"""
     
     def _parse_optimization_response(self, response: str) -> Tuple[str, str]:
-        """Parse the optimization response to extract reasoning and optimized prompt."""
+        """
+        Parse the optimization response to extract reasoning and optimized instructions section.
+        
+        Args:
+            response: The LLM response containing optimization reasoning and optimized instructions
+            
+        Returns:
+            Tuple of (optimized_instructions_section, reasoning)
+        """
         try:
             # Extract reasoning
-            reasoning_match = re.search(r'OPTIMIZATION_REASONING:\s*(.*?)\s*OPTIMIZED_PROMPT:', response, re.DOTALL)
+            reasoning_match = re.search(
+                r'OPTIMIZATION_REASONING:\s*(.*?)\s*(?:OPTIMIZED_INSTRUCTIONS|OPTIMIZED_PROMPT):', 
+                response, 
+                re.DOTALL
+            )
             reasoning = reasoning_match.group(1).strip() if reasoning_match else "No reasoning provided"
             
-            # Extract optimized prompt
-            prompt_match = re.search(r'OPTIMIZED_PROMPT:\s*(.*?)$', response, re.DOTALL)
-            optimized_prompt = prompt_match.group(1).strip() if prompt_match else response
+            # Extract optimized instructions section (look for both possible labels)
+            instructions_match = re.search(
+                r'(?:OPTIMIZED_INSTRUCTIONS|OPTIMIZED_PROMPT):\s*(.*?)$', 
+                response, 
+                re.DOTALL
+            )
+            optimized_section = instructions_match.group(1).strip() if instructions_match else response.strip()
             
-            # Validate and fix the prompt to ensure required variables are present
-            optimized_prompt = self._validate_and_fix_prompt(optimized_prompt)
+            # Clean up: remove any accidental template footer if LLM included it
+            footer_pattern = r'Given the following context and question.*?Question:\s*\{input\}'
+            optimized_section = re.sub(footer_pattern, '', optimized_section, flags=re.DOTALL | re.IGNORECASE).strip()
             
-            return optimized_prompt, reasoning
+            # Remove any template variables that shouldn't be here
+            optimized_section = optimized_section.replace('{context}', '').replace('{input}', '').strip()
+            
+            # Clean up extra whitespace
+            optimized_section = re.sub(r'\n{3,}', '\n\n', optimized_section)
+            optimized_section = optimized_section.rstrip()
+            
+            return optimized_section, reasoning
             
         except Exception as e:
             print(f"⚠️ Error parsing optimization response: {e}")
-            return response, "Error parsing optimization reasoning"
+            print(f"   Response preview: {response[:200]}...")
+            # Fallback: try to extract just the text after "OPTIMIZED_INSTRUCTIONS:" or similar
+            fallback_match = re.search(r'(?:OPTIMIZED|OPTIMIZED_INSTRUCTIONS|OPTIMIZED_PROMPT):\s*(.*)', response, re.DOTALL)
+            if fallback_match:
+                return fallback_match.group(1).strip(), "Error parsing optimization reasoning - used fallback extraction"
+            return response.strip(), "Error parsing optimization reasoning"
     
-    def _validate_and_fix_prompt(self, prompt: str) -> str:
+    def _validate_prompt_structure(self, prompt: str) -> bool:
         """
-        Validate and fix the prompt to ensure it has required template variables.
+        Validate that the prompt has the correct structure with required template variables.
         
         Args:
-            prompt: The optimized prompt to validate
+            prompt: The complete prompt to validate
             
         Returns:
-            Fixed prompt with required variables preserved
+            True if valid, False otherwise
         """
-        # Check if required variables are present
+        # Check if required variables are present in the footer
         has_context = '{context}' in prompt
         has_input = '{input}' in prompt
         
-        # If missing, try to fix by adding them
-        if not has_context or not has_input:
-            print(f"⚠️ Warning: Optimized prompt missing required template variables")
+        # Check if the fixed footer pattern exists
+        footer_pattern = r'Given the following context and question.*?Question:\s*\{input\}'
+        has_footer = bool(re.search(footer_pattern, prompt, re.DOTALL | re.IGNORECASE))
+        
+        if not (has_context and has_input):
+            print(f"⚠️ Warning: Prompt missing required template variables")
             print(f"   Has {{context}}: {has_context}, Has {{input}}: {has_input}")
-            
-            # Try to find and fix common patterns
-            # Look for "Context:" or "Question:" lines and fix them
-            lines = prompt.split('\n')
-            fixed_lines = []
-            context_found = False
-            input_found = False
-            
-            for line in lines:
-                # Check if this line should have context variable
-                if 'Context:' in line or 'context:' in line.lower():
-                    if '{context}' not in line:
-                        # Replace with proper format
-                        line = re.sub(r'Context:\s*.*', 'Context: {context}', line, flags=re.IGNORECASE)
-                        context_found = True
-                    else:
-                        context_found = True
-                
-                # Check if this line should have input variable
-                if 'Question:' in line or 'question:' in line.lower() or 'Input:' in line.lower():
-                    if '{input}' not in line:
-                        # Replace with proper format
-                        line = re.sub(r'(Question|Input):\s*.*', r'\1: {input}', line, flags=re.IGNORECASE)
-                        input_found = True
-                    else:
-                        input_found = True
-                
-                fixed_lines.append(line)
-            
-            # If still missing, add them explicitly
-            if not context_found:
-                # Find a good place to insert (after first line or before guidelines)
-                insert_idx = 1
-                for i, line in enumerate(fixed_lines):
-                    if 'Guidelines:' in line or 'guidelines:' in line.lower():
-                        insert_idx = i
-                        break
-                fixed_lines.insert(insert_idx, 'Context: {context}')
-                context_found = True
-            
-            if not input_found:
-                # Insert after context line
-                for i, line in enumerate(fixed_lines):
-                    if '{context}' in line:
-                        fixed_lines.insert(i + 1, 'Question: {input}')
-                        input_found = True
-                        break
-                if not input_found:
-                    # Fallback: add at beginning after first line
-                    fixed_lines.insert(1, 'Question: {input}')
-            
-            prompt = '\n'.join(fixed_lines)
-            print(f"   ✅ Fixed prompt to include required template variables")
+            return False
         
-        # Escape any other curly braces that aren't template variables
-        # First, temporarily replace the required variables with placeholders
-        prompt = prompt.replace('{context}', '__TEMP_CONTEXT__')
-        prompt = prompt.replace('{input}', '__TEMP_INPUT__')
+        if not has_footer:
+            print(f"⚠️ Warning: Prompt missing expected footer structure")
+            return False
         
-        # Now escape all remaining curly braces (double them)
-        prompt = re.sub(r'\{([^}]+)\}', r'{{\1}}', prompt)
-        
-        # Restore the required variables
-        prompt = prompt.replace('__TEMP_CONTEXT__', '{context}')
-        prompt = prompt.replace('__TEMP_INPUT__', '{input}')
-        
-        # Final validation
-        if '{context}' not in prompt or '{input}' not in prompt:
-            print(f"❌ Error: Could not ensure required variables in prompt. Adding fallback.")
-            # Last resort: prepend the required structure
-            if '{context}' not in prompt:
-                prompt = f"Context: {{context}}\n{prompt}"
-            if '{input}' not in prompt:
-                prompt = f"{prompt}\nQuestion: {{input}}"
-        
-        return prompt
+        return True
     
     def _save_optimization_result(self, result: PromptOptimizationResult):
         """Save optimization result to file."""
