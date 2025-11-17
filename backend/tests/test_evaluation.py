@@ -496,7 +496,7 @@ class EvaluationSystem:
             {'provider': 'chatopenai', 'model_name': 'ibm-granite/granite-3.3-8b-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8000/v1"},
             {'provider': 'chatopenai', 'model_name': 'openai/gpt-oss-20b', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8001/v1"},
             # Port 8002 doesn't accept streaming requests, so disable streaming
-            {'provider': 'chatopenai', 'model_name': 'Zyphra/Zamba2-7B-instruct', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1", "streaming": False},
+            {'provider': 'chatopenai', 'model_name': 'mistralai/Mistral-Small-Instruct-2409', 'api_key': "EMPTY", "base_url": "http://100.96.237.56:8002/v1", "streaming": False},
         ]
         jury_evaluator = create_rag_evaluator(jury_evaluator_configs)
         print(f"✅ Initialized jury evaluator with {len(jury_evaluator_configs)} jury members")
@@ -913,6 +913,16 @@ class EvaluationSystem:
                 best_iteration = iteration + 1
                 print(f"   🌟 New best score!")
             
+            # Step 3.5: Save current iteration's prompt
+            print(f"\n💾 Saving Iteration {iteration + 1} Prompt")
+            print("-" * 60)
+            self._save_iteration_prompt(iteration + 1, current_prompt, metrics)
+            
+            # Step 3.6: Generate graphs for current progress
+            print(f"\n📊 Generating Progress Graphs (Iteration {iteration + 1})")
+            print("-" * 60)
+            self._create_progress_graphs(iteration + 1)
+            
             # # Check early stopping
             # if metrics['pass_rate'] >= early_stop_threshold:
             #     print(f"\n✅ Early stopping: Pass rate {metrics['pass_rate']:.1f}% exceeds threshold {early_stop_threshold}%")
@@ -974,8 +984,10 @@ class EvaluationSystem:
         self._save_multi_iteration_results(analysis)
         
         print(f"\n✅ Multi-iteration workflow completed!")
-        print(f"📊 Check 'logs/evaluation_graphs/' for visual analysis")
+        print(f"📊 Check 'logs/evaluation_graphs/' for final comprehensive graphs")
+        print(f"📊 Check 'logs/evaluation_graphs/progress/' for per-iteration progress graphs")
         print(f"💾 Check 'logs/evaluation_workflows/' for detailed results")
+        print(f"💾 Check 'logs/evaluation_workflows/prompts/' for individual iteration prompts")
         
         return {
             'iteration_history': self.iteration_history,
@@ -1247,6 +1259,170 @@ class EvaluationSystem:
         ax.set_xlabel('Prompt Length (characters)', fontsize=13, fontweight='bold')
         ax.set_ylabel('Overall Score (0-10)', fontsize=13, fontweight='bold')
         ax.set_title('Prompt Length vs Performance Analysis', fontsize=15, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        ax.set_ylim([0, 10])
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _save_iteration_prompt(self, iteration: int, prompt: str, metrics: dict):
+        """Save the prompt for a specific iteration to a file."""
+        from datetime import datetime
+        from pathlib import Path
+        
+        # Create prompts directory
+        prompts_dir = Path("logs/evaluation_workflows/prompts")
+        prompts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Get timestamp for this workflow run (use first iteration's timestamp if available)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save full prompt
+        prompt_file = prompts_dir / f"iteration_{iteration}_prompt_{timestamp}.txt"
+        with open(prompt_file, 'w', encoding='utf-8') as f:
+            f.write(f"# Prompt from Iteration {iteration}\n")
+            f.write(f"# Overall Score: {metrics['avg_score']:.2f}/10\n")
+            f.write(f"# Pass Rate: {metrics['pass_rate']:.1f}%\n")
+            f.write(f"# Prompt Length: {len(prompt)} characters\n")
+            f.write(f"# Timestamp: {datetime.now().isoformat()}\n")
+            f.write(f"\n{'='*80}\n")
+            f.write("PROMPT:\n")
+            f.write(f"{'='*80}\n\n")
+            f.write(prompt)
+        
+        print(f"   ✅ Saved prompt to {prompt_file}")
+    
+    def _create_progress_graphs(self, current_iteration: int):
+        """Generate progress graphs showing all iterations up to current iteration."""
+        from datetime import datetime
+        from pathlib import Path
+        
+        if not self.iteration_history:
+            return
+        
+        # Create progress graphs directory
+        progress_dir = Path("logs/evaluation_graphs/progress")
+        progress_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Get history up to current iteration
+        current_history = [h for h in self.iteration_history if h['iteration'] <= current_iteration]
+        
+        if len(current_history) < 1:
+            return
+        
+        # Graph 1: Score progression (up to current iteration)
+        self._create_progress_score_chart(current_history, 
+                                         f"{progress_dir}/progress_score_iteration_{current_iteration}_{timestamp}.png")
+        
+        # Graph 2: Pass rate progression
+        self._create_progress_pass_rate_chart(current_history,
+                                             f"{progress_dir}/progress_passrate_iteration_{current_iteration}_{timestamp}.png")
+        
+        # Graph 3: Per-criterion progress (if we have multiple iterations)
+        if len(current_history) > 1:
+            self._create_progress_criteria_chart(current_history,
+                                                 f"{progress_dir}/progress_criteria_iteration_{current_iteration}_{timestamp}.png")
+        
+        print(f"   ✅ Generated progress graphs for iteration {current_iteration}")
+    
+    def _create_progress_score_chart(self, history: list, filename: str):
+        """Create score progression chart for current progress."""
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        iterations = [h['iteration'] for h in history]
+        scores = [h['metrics']['avg_score'] for h in history]
+        
+        # Plot with markers
+        ax.plot(iterations, scores, marker='o', linewidth=2.5, markersize=10,
+               color='#4ECDC4', label='Overall Score', alpha=0.8)
+        
+        # Highlight current iteration
+        if iterations:
+            ax.scatter([iterations[-1]], [scores[-1]], s=300, 
+                      color='gold', marker='*', zorder=5, label='Current Iteration')
+        
+        # Add value labels
+        for i, (it, score) in enumerate(zip(iterations, scores)):
+            ax.annotate(f'{score:.2f}', (it, score), textcoords="offset points",
+                       xytext=(0, 15), ha='center', fontsize=9, fontweight='bold')
+        
+        ax.set_xlabel('Iteration Number', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Overall Score (0-10)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Score Progression (Up to Iteration {iterations[-1] if iterations else 0})', 
+                    fontsize=14, fontweight='bold')
+        ax.set_ylim([0, 10])
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.legend()
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _create_progress_pass_rate_chart(self, history: list, filename: str):
+        """Create pass rate progression chart for current progress."""
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        iterations = [h['iteration'] for h in history]
+        pass_rates = [h['metrics']['pass_rate'] for h in history]
+        
+        # Bar chart with color coding
+        colors = ['#2ECC71' if pr >= 70 else '#F39C12' if pr >= 50 else '#E74C3C' 
+                 for pr in pass_rates]
+        bars = ax.bar(iterations, pass_rates, color=colors, alpha=0.8, 
+                     edgecolor='black', linewidth=1.5)
+        
+        # Add threshold line
+        ax.axhline(y=70, color='green', linestyle='--', linewidth=2, alpha=0.5, label='Target (70%)')
+        
+        # Add value labels
+        for bar, pr in zip(bars, pass_rates):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{pr:.1f}%', ha='center', va='bottom', fontsize=10, fontweight='bold')
+        
+        ax.set_xlabel('Iteration Number', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Pass Rate (%)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Pass Rate Progression (Up to Iteration {iterations[-1] if iterations else 0})', 
+                    fontsize=14, fontweight='bold')
+        ax.set_ylim([0, 100])
+        ax.legend()
+        ax.grid(axis='y', alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+    
+    def _create_progress_criteria_chart(self, history: list, filename: str):
+        """Create per-criterion progress chart for current progress."""
+        fig, ax = plt.subplots(figsize=(12, 7))
+        
+        iterations = [h['iteration'] for h in history]
+        
+        # Get all unique criteria
+        all_criteria = set()
+        for h in history:
+            all_criteria.update(h['metrics']['criterion_scores'].keys())
+        all_criteria = sorted(list(all_criteria))
+        
+        # Plot each criterion
+        colors = plt.cm.tab10(np.linspace(0, 1, len(all_criteria)))
+        
+        for criterion, color in zip(all_criteria, colors):
+            scores = []
+            for h in history:
+                score = h['metrics']['criterion_scores'].get(criterion, 0)
+                scores.append(score)
+            
+            ax.plot(iterations, scores, marker='o', linewidth=2, markersize=6,
+                   label=criterion.replace('_', ' ').title(), alpha=0.7, color=color)
+        
+        ax.set_xlabel('Iteration Number', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Average Score (0-10)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Per-Criterion Progress (Up to Iteration {iterations[-1] if iterations else 0})', 
+                    fontsize=14, fontweight='bold')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
         ax.grid(True, alpha=0.3)
         ax.set_ylim([0, 10])
         
