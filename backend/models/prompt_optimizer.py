@@ -201,13 +201,20 @@ OPTIMIZATION_REASONING:
 OPTIMIZED_PROMPT:
 [The complete optimized system prompt - include everything, don't just show changes]
 
-REQUIREMENTS:
+CRITICAL REQUIREMENTS:
+- **MUST PRESERVE** the template variables exactly as they appear: {{context}} and {{input}}
+- The optimized prompt MUST include these lines exactly:
+  Context: {{context}}
+  Question: {{input}}
+- Any other text with curly braces that is NOT a template variable must be escaped with double curly braces (e.g., if the text contains curly braces for emphasis or examples, double them so they're treated as literal text, not template variables)
 - Keep the same general structure and core instructions
 - Address the specific failed criteria (empathy, sensitivity, safety, etc.)
 - Maintain the trauma-informed and military-focused approach
 - Preserve tool usage requirements and formatting rules
 - Make targeted improvements without completely rewriting
-- Ensure the prompt remains clear and actionable"""
+- Ensure the prompt remains clear and actionable
+
+IMPORTANT: The optimized prompt MUST be a valid LangChain template with {{context}} and {{input}} as the only template variables."""
     
     def _parse_optimization_response(self, response: str) -> Tuple[str, str]:
         """Parse the optimization response to extract reasoning and optimized prompt."""
@@ -220,11 +227,109 @@ REQUIREMENTS:
             prompt_match = re.search(r'OPTIMIZED_PROMPT:\s*(.*?)$', response, re.DOTALL)
             optimized_prompt = prompt_match.group(1).strip() if prompt_match else response
             
+            # Validate and fix the prompt to ensure required variables are present
+            optimized_prompt = self._validate_and_fix_prompt(optimized_prompt)
+            
             return optimized_prompt, reasoning
             
         except Exception as e:
             print(f"⚠️ Error parsing optimization response: {e}")
             return response, "Error parsing optimization reasoning"
+    
+    def _validate_and_fix_prompt(self, prompt: str) -> str:
+        """
+        Validate and fix the prompt to ensure it has required template variables.
+        
+        Args:
+            prompt: The optimized prompt to validate
+            
+        Returns:
+            Fixed prompt with required variables preserved
+        """
+        # Check if required variables are present
+        has_context = '{context}' in prompt
+        has_input = '{input}' in prompt
+        
+        # If missing, try to fix by adding them
+        if not has_context or not has_input:
+            print(f"⚠️ Warning: Optimized prompt missing required template variables")
+            print(f"   Has {{context}}: {has_context}, Has {{input}}: {has_input}")
+            
+            # Try to find and fix common patterns
+            # Look for "Context:" or "Question:" lines and fix them
+            lines = prompt.split('\n')
+            fixed_lines = []
+            context_found = False
+            input_found = False
+            
+            for line in lines:
+                # Check if this line should have context variable
+                if 'Context:' in line or 'context:' in line.lower():
+                    if '{context}' not in line:
+                        # Replace with proper format
+                        line = re.sub(r'Context:\s*.*', 'Context: {context}', line, flags=re.IGNORECASE)
+                        context_found = True
+                    else:
+                        context_found = True
+                
+                # Check if this line should have input variable
+                if 'Question:' in line or 'question:' in line.lower() or 'Input:' in line.lower():
+                    if '{input}' not in line:
+                        # Replace with proper format
+                        line = re.sub(r'(Question|Input):\s*.*', r'\1: {input}', line, flags=re.IGNORECASE)
+                        input_found = True
+                    else:
+                        input_found = True
+                
+                fixed_lines.append(line)
+            
+            # If still missing, add them explicitly
+            if not context_found:
+                # Find a good place to insert (after first line or before guidelines)
+                insert_idx = 1
+                for i, line in enumerate(fixed_lines):
+                    if 'Guidelines:' in line or 'guidelines:' in line.lower():
+                        insert_idx = i
+                        break
+                fixed_lines.insert(insert_idx, 'Context: {context}')
+                context_found = True
+            
+            if not input_found:
+                # Insert after context line
+                for i, line in enumerate(fixed_lines):
+                    if '{context}' in line:
+                        fixed_lines.insert(i + 1, 'Question: {input}')
+                        input_found = True
+                        break
+                if not input_found:
+                    # Fallback: add at beginning after first line
+                    fixed_lines.insert(1, 'Question: {input}')
+            
+            prompt = '\n'.join(fixed_lines)
+            print(f"   ✅ Fixed prompt to include required template variables")
+        
+        # Escape any other curly braces that aren't template variables
+        # First, temporarily replace the required variables with placeholders
+        prompt = prompt.replace('{context}', '__TEMP_CONTEXT__')
+        prompt = prompt.replace('{input}', '__TEMP_INPUT__')
+        
+        # Now escape all remaining curly braces (double them)
+        prompt = re.sub(r'\{([^}]+)\}', r'{{\1}}', prompt)
+        
+        # Restore the required variables
+        prompt = prompt.replace('__TEMP_CONTEXT__', '{context}')
+        prompt = prompt.replace('__TEMP_INPUT__', '{input}')
+        
+        # Final validation
+        if '{context}' not in prompt or '{input}' not in prompt:
+            print(f"❌ Error: Could not ensure required variables in prompt. Adding fallback.")
+            # Last resort: prepend the required structure
+            if '{context}' not in prompt:
+                prompt = f"Context: {{context}}\n{prompt}"
+            if '{input}' not in prompt:
+                prompt = f"{prompt}\nQuestion: {{input}}"
+        
+        return prompt
     
     def _save_optimization_result(self, result: PromptOptimizationResult):
         """Save optimization result to file."""
