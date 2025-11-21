@@ -47,6 +47,8 @@ class SystemPromptOptimizer:
         self.max_iterations = kwargs.get('max_iterations', 5)
         self.min_pass_rate_threshold = kwargs.get('min_pass_rate_threshold', 80.0)
         self.save_optimizations = kwargs.get('save_optimizations', True)
+        self.token_limit = kwargs.get('token_limit', 32768)
+        # actual token limit is self.token_limit - 1000, because we need to leave some tokens for the footer
         
         # Create optimization logs directory
         self.log_dir = Path(kwargs.get('log_dir', 'logs/prompt_optimization'))
@@ -279,6 +281,7 @@ IMPROVEMENT SUGGESTIONS:
 {improvement_suggestions}
 
 OPTIMIZATION TASK:
+You are allowed to use up to {self.token_limit - 1000} tokens in your response.
 1. Analyze the instructions/guidelines section above
 2. Apply the improvement suggestions to optimize this section
 3. You can ADD, REMOVE, or MODIFY lines in the instructions/guidelines
@@ -296,7 +299,7 @@ OPTIMIZATION_REASONING:
 
 OPTIMIZED_INSTRUCTIONS:
 [The optimized instructions/guidelines section - return only this section, nothing else]"""
-    
+        
     def _parse_optimization_response(self, response: str) -> Tuple[str, str]:
         """
         Parse the optimization response to extract reasoning and optimized instructions section.
