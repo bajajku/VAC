@@ -504,23 +504,26 @@ class EvaluationSystem:
 
     def initialize_judge_llm(self):
         """Initialize the Judge LLM for final verdicts."""
-        judge_llm = LLM(
+        # Create shared LLM instance for both Judge and Optimizer
+        self.shared_llm = LLM(
             provider='chatopenai',
             model_name='meta-llama/Meta-Llama-3-70B-Instruct',
             api_key="EMPTY",
             base_url="http://100.96.237.56:8003/v1"
         )
-        judge = JudgeLLM(judge_llm)
+        judge = JudgeLLM(self.shared_llm)
         return judge
 
     def initialize_prompt_optimizer(self):
         """Initialize the prompt optimizer."""
+        # Reuse the shared LLM instance
         prompt_optimizer = create_prompt_optimizer(
-            optimizer_llm=LLM(provider='chatopenai', model_name='Qwen/Qwen2.5-14B-Instruct', api_key="token-abc123"),
+            optimizer_llm=self.shared_llm,
             max_iterations=3,
-            min_pass_rate_threshold=85.0
+            min_pass_rate_threshold=90.0,
+            token_limit=32768
         )
-        print(f"✅ Initialized prompt optimizer")
+        print(f"✅ Initialized prompt optimizer with Shared LLM")
         return prompt_optimizer
 
     def initialize_rag_agent(self, prompt: str = PROMPT_TEMPLATE):
