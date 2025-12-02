@@ -684,6 +684,47 @@ class EvaluationSystem:
 
         return results
     
+    def evaluate_single_question(self, question: str, prompt: str = PROMPT_TEMPLATE, use_judge: bool = True):
+        """
+        Evaluate a single question with the given prompt.
+        
+        Args:
+            question: The test question to evaluate
+            prompt: The system prompt to use
+            use_judge: Whether to use the judge for final verdicts (default: True)
+        
+        Returns:
+            RAGEvaluationReport for the single question
+        """
+        self.rag_app = self.initialize_rag_agent(prompt)
+        
+        print(f"\n{'='*60}")
+        print(f"Evaluating question: {question[:60]}...")
+        print(f"{'='*60}")
+
+        # RAG response generation - KEEP SYNCHRONOUS
+        response = self.rag_app.rag_application.invoke(question)
+        query, context, answer = response['input'], condense_context(response['context']), response['answer']
+
+        if use_judge:
+            # Use async judge-supervised evaluation (criteria evaluated in parallel)
+            evaluation_report = asyncio.run(
+                self.evaluate_with_judge_async(
+                    query=query,
+                    response=answer,
+                    context_documents=context
+                )
+            )
+        else:
+            # Use standard jury evaluation
+            evaluation_report = self.jury_evaluator.evaluate_rag_response(
+                query=query,
+                response=answer,
+                context_documents=context
+            )
+
+        return evaluation_report
+    
     def evaluate_with_judge(self, query: str, response: str, context_documents: List[str]):
         """
         Evaluate using jury + judge system.
@@ -1107,6 +1148,171 @@ class EvaluationSystem:
             'iteration_history': self.iteration_history,
             'analysis': analysis,
             'best_prompt': self.iteration_history[analysis['best_iteration'] - 1]['prompt']
+        }
+    
+    def run_multi_iteration_workflow_per_question(self, max_iterations: int = 5, early_stop_threshold: float = 95.0, resume: bool = False):
+        """
+        ALTERNATIVE APPROACH: Run multiple iterations per question (1 question across all iterations, then next question).
+        
+        This approach:
+        - Evaluates Question 1 through all iterations
+        - Then evaluates Question 2 through all iterations
+        - And so on...
+        
+        Args:
+            max_iterations: Maximum number of iterations to run per question
+            early_stop_threshold: (Deprecated - no longer used) All iterations will run
+            resume: Whether to resume from the last checkpoint if available
+        
+        Returns:
+            dict: Complete iteration history with best prompts per question
+        """
+        print("🚀 Starting Multi-Iteration Evaluation Workflow (PER-QUESTION APPROACH)")
+        print(f"   Max Iterations per Question: {max_iterations}")
+        print(f"   Total Questions: {len(TEST_CASES)}")
+        print("=" * 60)
+        
+        # Store results per question
+        question_results = {}
+        all_question_history = []
+        
+        # Process each question through all iterations
+        for question_idx, question in enumerate(TEST_CASES, 1):
+            print(f"\n{'#'*80}")
+            print(f"# QUESTION {question_idx}/{len(TEST_CASES)}: {question[:70]}...")
+            print(f"{'#'*80}")
+            
+            current_prompt = PROMPT_TEMPLATE
+            question_iteration_history = []
+            best_iteration = None
+            best_score = -1
+            
+            # Check for resume (per-question checkpoint)
+            start_iteration = 0
+            if resume:
+                checkpoint_state = self._load_checkpoint_per_question(question_idx, question)
+                if checkpoint_state:
+                    start_iteration = checkpoint_state['iteration_number']
+                    current_prompt = checkpoint_state['current_prompt']
+                    question_iteration_history = checkpoint_state['iteration_history']
+                    print(f"   ⏩ Resuming Question {question_idx} from Iteration {start_iteration + 1}")
+            
+            # Run iterations for this question
+            for iteration in range(start_iteration, max_iterations):
+                print(f"\n{'='*80}")
+                print(f"🔄 QUESTION {question_idx} - ITERATION {iteration + 1}/{max_iterations}")
+                print(f"{'='*80}")
+                
+                # Step 1: Evaluate current prompt on this single question
+                print(f"\n📊 Evaluating Question (Iteration {iteration + 1})")
+                print("-" * 60)
+                evaluation_report = self.evaluate_single_question(
+                    question=question,
+                    prompt=current_prompt
+                )
+                
+                # Step 2: Calculate metrics (single question metrics)
+                metrics = {
+                    'score': evaluation_report.overall_score,
+                    'pass_rate': evaluation_report.pass_rate,
+                    'pass_fail': evaluation_report.overall_pass_fail,
+                    'criterion_scores': {
+                        criterion: result.score 
+                        for criterion, result in evaluation_report.evaluation_results.items()
+                    }
+                }
+                
+                # Step 3: Store iteration data
+                iteration_data = {
+                    'question': question,
+                    'question_idx': question_idx,
+                    'iteration': iteration + 1,
+                    'prompt': current_prompt,
+                    'evaluation_report': evaluation_report,
+                    'metrics': metrics,
+                    'prompt_length': len(current_prompt)
+                }
+                question_iteration_history.append(iteration_data)
+                
+                # Display results
+                print(f"\n📈 Question {question_idx} - Iteration {iteration + 1} Results:")
+                print(f"   Score: {metrics['score']:.2f}/10")
+                print(f"   Pass/Fail: {metrics['pass_fail']}")
+                print(f"   Prompt Length: {len(current_prompt)} chars")
+                
+                # Track best iteration for this question
+                if metrics['score'] > best_score:
+                    best_score = metrics['score']
+                    best_iteration = iteration + 1
+                    print(f"   🌟 New best score for this question!")
+                
+                # Step 4: Generate optimization for next iteration (if not last iteration)
+                if iteration < max_iterations - 1:
+                    print(f"\n🔧 Generating Optimized Prompt for Iteration {iteration + 2}")
+                    print("-" * 60)
+                    
+                    try:
+                        optimization_result = self.prompt_optimizer.optimize_prompt_from_evaluation(
+                            current_prompt=current_prompt,
+                            evaluation_report=evaluation_report,
+                            iteration_number=iteration + 1
+                        )
+                        current_prompt = optimization_result.optimized_prompt
+                        
+                        print(f"   Applied {len(optimization_result.applied_suggestions)} suggestions")
+                        print(f"   New prompt length: {len(current_prompt)} chars")
+                    except Exception as e:
+                        print(f"   ⚠️ Optimization failed: {e}")
+                        print(f"   Stopping iterations for this question.")
+                        break
+                
+                # Save checkpoint after each iteration
+                self._save_checkpoint_per_question(question_idx, question, iteration + 1, current_prompt, question_iteration_history)
+            
+            # Store results for this question
+            question_results[question_idx] = {
+                'question': question,
+                'best_iteration': best_iteration,
+                'best_score': best_score,
+                'iteration_history': question_iteration_history,
+                'best_prompt': question_iteration_history[best_iteration - 1]['prompt'] if best_iteration else current_prompt
+            }
+            all_question_history.append(question_results[question_idx])
+            
+            # Generate graphs for this question
+            print(f"\n📊 Generating Graphs for Question {question_idx}")
+            print("-" * 60)
+            self._create_per_question_graphs(question_idx, question_iteration_history)
+        
+        # Final Analysis across all questions
+        print(f"\n{'='*80}")
+        print("📊 CROSS-QUESTION ANALYSIS")
+        print(f"{'='*80}")
+        
+        analysis = self._perform_per_question_analysis(question_results)
+        
+        print(f"\n🏆 Overall Best Question Performance:")
+        print(f"   Question: #{analysis['best_question_idx']}")
+        print(f"   Best Score: {analysis['best_question_score']:.2f}/10")
+        print(f"   Best Iteration: #{analysis['best_question_iteration']}")
+        
+        print(f"\n📈 Average Performance Across All Questions:")
+        print(f"   Average Best Score: {analysis['avg_best_score']:.2f}/10")
+        print(f"   Average Best Iteration: {analysis['avg_best_iteration']:.1f}")
+        
+        # Save results
+        print(f"\n💾 Saving Per-Question Results")
+        print("-" * 60)
+        self._save_per_question_results(question_results, analysis)
+        
+        print(f"\n✅ Per-question multi-iteration workflow completed!")
+        print(f"📊 Check 'logs/evaluation_graphs/per_question/' for question-specific graphs")
+        print(f"💾 Check 'logs/evaluation_workflows/per_question/' for detailed results")
+        
+        return {
+            'question_results': question_results,
+            'analysis': analysis,
+            'all_question_history': all_question_history
         }
     
     def _calculate_iteration_metrics(self, results: list) -> dict:
@@ -1544,6 +1750,202 @@ class EvaluationSystem:
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         plt.close()
     
+    def _save_checkpoint_per_question(self, question_idx: int, question: str, iteration: int, current_prompt: str, iteration_history: list):
+        """Save checkpoint for a specific question."""
+        import pickle
+        import os
+        import shutil
+        from pathlib import Path
+        
+        checkpoint_dir = Path("logs/evaluation_workflows/checkpoints/per_question")
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        # File paths
+        final_path = checkpoint_dir / f"question_{question_idx}_checkpoint_latest.pkl"
+        temp_path = checkpoint_dir / f"question_{question_idx}_checkpoint_temp.tmp"
+        backup_path = checkpoint_dir / f"question_{question_idx}_checkpoint_previous.pkl"
+        
+        try:
+            state = {
+                'version': '1.0',
+                'timestamp': datetime.now().isoformat(),
+                'question_idx': question_idx,
+                'question': question,
+                'iteration_number': iteration,
+                'current_prompt': current_prompt,
+                'iteration_history': iteration_history
+            }
+            
+            # Write to temporary file first
+            with open(temp_path, 'wb') as f:
+                pickle.dump(state, f)
+                f.flush()
+                os.fsync(f.fileno())
+            
+            # Rotate backup
+            if final_path.exists():
+                shutil.copy2(final_path, backup_path)
+            
+            # Atomic rename
+            os.replace(temp_path, final_path)
+            
+        except Exception as e:
+            print(f"   ⚠️ Failed to save checkpoint for question {question_idx}: {e}")
+            if temp_path.exists():
+                try: os.remove(temp_path)
+                except: pass
+    
+    def _load_checkpoint_per_question(self, question_idx: int, question: str):
+        """Load checkpoint for a specific question."""
+        import pickle
+        from pathlib import Path
+        
+        checkpoint_dir = Path("logs/evaluation_workflows/checkpoints/per_question")
+        primary_file = checkpoint_dir / f"question_{question_idx}_checkpoint_latest.pkl"
+        backup_file = checkpoint_dir / f"question_{question_idx}_checkpoint_previous.pkl"
+        
+        def load_file(path):
+            if not path.exists(): return None
+            try:
+                with open(path, 'rb') as f:
+                    state = pickle.load(f)
+                    # Verify it's for the same question
+                    if state.get('question') == question:
+                        return state
+                    return None
+            except Exception as e:
+                print(f"   ⚠️ Corrupt checkpoint at {path}: {e}")
+                return None
+        
+        # Try primary first
+        state = load_file(primary_file)
+        if state:
+            return state
+        
+        # Fallback to backup
+        state = load_file(backup_file)
+        return state
+    
+    def _create_per_question_graphs(self, question_idx: int, iteration_history: list):
+        """Create graphs for a single question's iteration history."""
+        from pathlib import Path
+        from datetime import datetime
+        
+        if not iteration_history:
+            return
+        
+        graph_dir = Path("logs/evaluation_graphs/per_question")
+        graph_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Graph 1: Score progression
+        iterations = [h['iteration'] for h in iteration_history]
+        scores = [h['metrics']['score'] for h in iteration_history]
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(iterations, scores, marker='o', linewidth=2.5, markersize=10,
+               color='#4ECDC4', label='Score', alpha=0.8)
+        
+        # Highlight best iteration
+        best_idx = scores.index(max(scores))
+        ax.scatter([iterations[best_idx]], [scores[best_idx]], s=300,
+                  color='gold', marker='*', zorder=5, label='Best Iteration')
+        
+        ax.set_xlabel('Iteration Number', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Score (0-10)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Question {question_idx} - Score Progression', fontsize=14, fontweight='bold')
+        ax.set_ylim([0, 10])
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        # Annotate scores
+        for it, score in zip(iterations, scores):
+            ax.annotate(f'{score:.2f}', (it, score), textcoords="offset points",
+                       xytext=(0, 10), ha='center', fontsize=9)
+        
+        plt.tight_layout()
+        filename = graph_dir / f"question_{question_idx}_progression_{timestamp}.png"
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"   ✅ Generated graph for question {question_idx}")
+    
+    def _perform_per_question_analysis(self, question_results: dict) -> dict:
+        """Perform analysis across all questions."""
+        if not question_results:
+            return {}
+        
+        best_question_idx = None
+        best_question_score = -1
+        best_question_iteration = None
+        
+        scores = []
+        iterations = []
+        
+        for q_idx, result in question_results.items():
+            score = result['best_score']
+            iteration = result['best_iteration']
+            
+            scores.append(score)
+            iterations.append(iteration)
+            
+            if score > best_question_score:
+                best_question_score = score
+                best_question_idx = q_idx
+                best_question_iteration = iteration
+        
+        return {
+            'best_question_idx': best_question_idx,
+            'best_question_score': best_question_score,
+            'best_question_iteration': best_question_iteration,
+            'avg_best_score': np.mean(scores) if scores else 0,
+            'avg_best_iteration': np.mean(iterations) if iterations else 0,
+            'total_questions': len(question_results)
+        }
+    
+    def _save_per_question_results(self, question_results: dict, analysis: dict):
+        """Save per-question results to file."""
+        from datetime import datetime
+        import json
+        from pathlib import Path
+        
+        results_dir = Path("logs/evaluation_workflows/per_question")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Prepare data
+        workflow_data = {
+            'timestamp': timestamp,
+            'analysis': analysis,
+            'questions': []
+        }
+        
+        for q_idx, result in question_results.items():
+            question_summary = {
+                'question_idx': q_idx,
+                'question': result['question'],
+                'best_iteration': result['best_iteration'],
+                'best_score': result['best_score'],
+                'best_prompt': result['best_prompt'][:500] + '...' if len(result['best_prompt']) > 500 else result['best_prompt'],
+                'iterations': [
+                    {
+                        'iteration': h['iteration'],
+                        'score': h['metrics']['score'],
+                        'pass_fail': h['metrics']['pass_fail'],
+                        'prompt_length': h['prompt_length']
+                    }
+                    for h in result['iteration_history']
+                ]
+            }
+            workflow_data['questions'].append(question_summary)
+        
+        # Save
+        filename = results_dir / f"per_question_workflow_{timestamp}.json"
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(workflow_data, f, indent=2, ensure_ascii=False, default=str)
+        
+        print(f"💾 Saved per-question results to {filename}")
+    
     def _save_multi_iteration_results(self, analysis: dict):
         """Save multi-iteration results to file."""
         from datetime import datetime
@@ -1729,27 +2131,52 @@ if __name__ == "__main__":
                        help='(Deprecated - no longer used) All iterations will run regardless of threshold')
     parser.add_argument('--resume', action='store_true',
                        help='Resume from the last checkpoint if available')
+    parser.add_argument('--approach', type=str, default='all_questions', 
+                       choices=['all_questions', 'per_question'],
+                       help='Multi-iteration approach: all_questions (evaluate all questions per iteration) or per_question (1 question across all iterations) (default: all_questions)')
     
     args = parser.parse_args()
     
     evaluation_system = EvaluationSystem()
     
     if args.mode == 'multi':
-        print(f"🔄 Running MULTI-ITERATION mode (max {args.iterations} iterations)")
-        result = evaluation_system.run_multi_iteration_workflow(
-            max_iterations=args.iterations,
-            early_stop_threshold=args.threshold,
-            resume=args.resume
-        )
-        
-        # Display final summary
-        print("\n" + "="*80)
-        print("🏆 FINAL SUMMARY")
-        print("="*80)
-        print(f"Best Iteration: #{result['analysis']['best_iteration']}")
-        print(f"Best Score: {result['analysis']['best_score']:.2f}/10")
-        print(f"Total Improvement: {result['analysis']['total_improvement']:+.2f} points")
-        print(f"Trend: {result['analysis']['trend']}")
+        if args.approach == 'all_questions':
+            print(f"🔄 Running MULTI-ITERATION mode (APPROACH 1: All Questions Per Iteration)")
+            print(f"   Max Iterations: {args.iterations}")
+            print(f"   Flow: Iteration 1 → All Questions → Iteration 2 → All Questions → ...")
+            result = evaluation_system.run_multi_iteration_workflow(
+                max_iterations=args.iterations,
+                early_stop_threshold=args.threshold,
+                resume=args.resume
+            )
+            
+            # Display final summary
+            print("\n" + "="*80)
+            print("🏆 FINAL SUMMARY")
+            print("="*80)
+            print(f"Best Iteration: #{result['analysis']['best_iteration']}")
+            print(f"Best Score: {result['analysis']['best_score']:.2f}/10")
+            print(f"Total Improvement: {result['analysis']['total_improvement']:+.2f} points")
+            print(f"Trend: {result['analysis']['trend']}")
+        else:  # per_question
+            print(f"🔄 Running MULTI-ITERATION mode (APPROACH 2: Per Question)")
+            print(f"   Max Iterations per Question: {args.iterations}")
+            print(f"   Flow: Question 1 → All Iterations → Question 2 → All Iterations → ...")
+            result = evaluation_system.run_multi_iteration_workflow_per_question(
+                max_iterations=args.iterations,
+                early_stop_threshold=args.threshold,
+                resume=args.resume
+            )
+            
+            # Display final summary
+            print("\n" + "="*80)
+            print("🏆 FINAL SUMMARY")
+            print("="*80)
+            print(f"Best Question: #{result['analysis']['best_question_idx']}")
+            print(f"Best Question Score: {result['analysis']['best_question_score']:.2f}/10")
+            print(f"Best Question Iteration: #{result['analysis']['best_question_iteration']}")
+            print(f"Average Best Score: {result['analysis']['avg_best_score']:.2f}/10")
+            print(f"Average Best Iteration: {result['analysis']['avg_best_iteration']:.1f}")
         
     else:
         print("🔄 Running SINGLE-ITERATION mode")
