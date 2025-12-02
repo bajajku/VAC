@@ -861,27 +861,133 @@ class EvaluationSystem:
             }
         )
     
-    def run_multi_iteration_workflow(self, max_iterations: int = 5, early_stop_threshold: float = 95.0):
+    def _save_checkpoint(self, iteration: int, current_prompt: str):
+        """
+        Save workflow state Safely using Atomic Writes and Backups.
+        """
+        import pickle
+        import os
+        import shutil
+        from pathlib import Path
+        
+        checkpoint_dir = Path("logs/evaluation_workflows/checkpoints")
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        # File paths
+        final_path = checkpoint_dir / "checkpoint_latest.pkl"
+        temp_path = checkpoint_dir / "checkpoint_temp.tmp"     # Write here first
+        backup_path = checkpoint_dir / "checkpoint_previous.pkl" # Keep one old copy
+        
+        try:
+            state = {
+                'version': '1.0',  # Good practice: Version your schema
+                'timestamp': datetime.now().isoformat(),
+                'iteration_number': iteration,
+                'current_prompt': current_prompt,
+                'iteration_history': self.iteration_history
+            }
+            
+            # 1. Write to temporary file first (Atomic Phase 1)
+            with open(temp_path, 'wb') as f:
+                pickle.dump(state, f)
+                f.flush()           # Flush python buffer
+                os.fsync(f.fileno()) # Force OS to write to physical disk
+            
+            # 2. Rotate backup (Redundancy)
+            if final_path.exists():
+                shutil.copy2(final_path, backup_path)
+            
+            # 3. Atomic Rename (Atomic Phase 2)
+            # This operation is atomic on POSIX systems. It switches the files instantly.
+            # If the script crashes before this line, 'final_path' is untouched.
+            os.replace(temp_path, final_path)
+            
+            print(f"   💾 Checkpoint saved safely (Iter {iteration})")
+            
+        except Exception as e:
+            print(f"   ⚠️ CRITICAL: Failed to save checkpoint: {e}")
+            # Cleanup temp file if it exists
+            if temp_path.exists():
+                try: os.remove(temp_path)
+                except: pass
+
+    def _load_checkpoint(self):
+        """Load the latest checkpoint with fallback to backup."""
+        import pickle
+        from pathlib import Path
+        
+        checkpoint_dir = Path("logs/evaluation_workflows/checkpoints")
+        primary_file = checkpoint_dir / "checkpoint_latest.pkl"
+        backup_file = checkpoint_dir / "checkpoint_previous.pkl"
+        
+        def load_file(path):
+            if not path.exists(): return None
+            try:
+                with open(path, 'rb') as f:
+                    return pickle.load(f)
+            except Exception as e:
+                print(f"   ⚠️ Corrupt checkpoint at {path}: {e}")
+                return None
+
+        # Try primary first
+        state = load_file(primary_file)
+        if state:
+            print(f"   ✅ Resuming from Primary Checkpoint: Iteration {state.get('iteration_number')}")
+            return state
+            
+        # Fallback to backup if primary fails
+        print("   ⚠️ Primary checkpoint failed or missing. Checking backup...")
+        state = load_file(backup_file)
+        if state:
+            print(f"   ✅ Resuming from Backup Checkpoint: Iteration {state.get('iteration_number')}")
+            return state
+            
+        return None
+
+    def run_multi_iteration_workflow(self, max_iterations: int = 5, early_stop_threshold: float = 95.0, resume: bool = False):
         """
         Run multiple iterations of evaluation and optimization.
         
         Args:
             max_iterations: Maximum number of iterations to run
             early_stop_threshold: (Deprecated - no longer used) All iterations will run
+            resume: Whether to resume from the last checkpoint if available
         
         Returns:
             dict: Complete iteration history with best prompt identified
         """
         print("🚀 Starting Multi-Iteration Evaluation Workflow")
         print(f"   Max Iterations: {max_iterations}")
-        print(f"   Running all {max_iterations} iterations (no early stopping)")
-        print("=" * 60)
         
         current_prompt = PROMPT_TEMPLATE
+        start_iteration = 0
+        
+        # Check for resume
+        if resume:
+            checkpoint_state = self._load_checkpoint()
+            if checkpoint_state:
+                start_iteration = checkpoint_state['iteration_number']
+                current_prompt = checkpoint_state['current_prompt']
+                self.iteration_history = checkpoint_state['iteration_history']
+                print(f"   ⏩ Resuming from Iteration {start_iteration + 1}")
+                print(f"   ⏩ Loaded {len(self.iteration_history)} previous iterations")
+            else:
+                print("   ⚠️ No checkpoint found. Starting fresh.")
+        
+        print(f"   Running iterations {start_iteration + 1} to {max_iterations}")
+        print("=" * 60)
+        
         best_iteration = None
         best_score = -1
         
-        for iteration in range(max_iterations):
+        # If resuming, verify best_score from history
+        if self.iteration_history:
+            for h in self.iteration_history:
+                if h['metrics']['avg_score'] > best_score:
+                    best_score = h['metrics']['avg_score']
+                    best_iteration = h['iteration']
+        
+        for iteration in range(start_iteration, max_iterations):
             print(f"\n{'='*80}")
             print(f"🔄 ITERATION {iteration + 1}/{max_iterations}")
             print(f"{'='*80}")
@@ -956,7 +1062,12 @@ class EvaluationSystem:
                 except Exception as e:
                     print(f"   ⚠️ Optimization failed: {e}")
                     print(f"   Stopping iterations.")
+                    # Save checkpoint even if optimization fails (so we have the history)
+                    self._save_checkpoint(iteration + 1, current_prompt)
                     break
+            
+            # Save checkpoint after iteration (and optimization) is complete
+            self._save_checkpoint(iteration + 1, current_prompt)
         
         # Final Analysis
         print(f"\n{'='*80}")
@@ -1616,6 +1727,8 @@ if __name__ == "__main__":
                        help='Maximum number of iterations for multi mode (default: 5)')
     parser.add_argument('--threshold', type=float, default=95.0,
                        help='(Deprecated - no longer used) All iterations will run regardless of threshold')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume from the last checkpoint if available')
     
     args = parser.parse_args()
     
@@ -1625,7 +1738,8 @@ if __name__ == "__main__":
         print(f"🔄 Running MULTI-ITERATION mode (max {args.iterations} iterations)")
         result = evaluation_system.run_multi_iteration_workflow(
             max_iterations=args.iterations,
-            early_stop_threshold=args.threshold
+            early_stop_threshold=args.threshold,
+            resume=args.resume
         )
         
         # Display final summary
