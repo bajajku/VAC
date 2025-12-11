@@ -273,10 +273,6 @@ const ChatPage = () => {
         let fullText = '';
         const collectedSources: string[] = [];
         let botMessageId: number | null = null;
-  
-        // Optimized variables for better performance
-        let chunkCounter = 0;
-        const updateInterval = 3; // Update UI every 3 chunks instead of every chunk
         
         while (true) {
           const { value, done } = await reader.read();
