@@ -34,18 +34,10 @@ const LoginForm = () => {
       
       const response = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
-<<<<<<< HEAD
-<<<<<<< HEAD
+
         headers: {
           'ngrok-skip-browser-warning': 'true'
         },
-=======
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
-=======
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        },
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
         body: new URLSearchParams({
             'username': email,
             'password': password,
@@ -59,10 +51,7 @@ const LoginForm = () => {
       }
 
       Cookies.set('token', data.access_token, { expires: 7, sameSite: 'Lax' });
-<<<<<<< HEAD
       Cookies.set('refresh_token', data.refresh_token, { expires: 7, sameSite: 'Lax' });
-=======
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
       router.push(redirectPath);
 
     } catch (err: unknown) {
@@ -86,21 +75,11 @@ const LoginForm = () => {
       // Get the current origin for the redirect URL
       const redirectUri = `${window.location.origin}/auth/google/callback`;
       
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
       const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=${encodeURIComponent(redirectUri)}`, {
         headers: {
           'ngrok-skip-browser-warning': 'true'
         }
       });
-<<<<<<< HEAD
-=======
-      const response = await fetch(`${BASE_URL}/auth/google/login?redirect_url=${encodeURIComponent(redirectUri)}`);
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
-=======
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
       const data = await response.json();
       
       if (data.authorization_url) {

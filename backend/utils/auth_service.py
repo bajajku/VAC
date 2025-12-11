@@ -7,10 +7,6 @@ import secrets
 import warnings
 from typing import Optional, Dict, Tuple
 
-<<<<<<< HEAD
-
-=======
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
 # Improved SECRET_KEY handling with fallback
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

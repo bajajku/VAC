@@ -1,7 +1,4 @@
-<<<<<<< HEAD
 import { refreshTokenIfNeeded } from '../utils/refreshToken';
-=======
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
 // Types for chat session management
 import Cookies from 'js-cookie';
 export type ChatMessage = {
@@ -51,7 +48,6 @@ class SessionService {
   constructor() {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
-<<<<<<< HEAD
   private async getAuthHeaders(): Promise<HeadersInit> {
     // Try to refresh token if needed
     const isValid = await refreshTokenIfNeeded();
@@ -66,14 +62,6 @@ class SessionService {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true'
-=======
-
-  private getAuthHeaders(): HeadersInit {
-    const token = Cookies.get('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
     };
   }
 
@@ -82,11 +70,7 @@ class SessionService {
 
       const response = await fetch(`${this.baseUrl}/sessions/new`, {
         method: 'POST',
-<<<<<<< HEAD
         headers: await this.getAuthHeaders(),
-=======
-        headers: this.getAuthHeaders(),
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         body: JSON.stringify(request),
       });
 
@@ -110,11 +94,7 @@ class SessionService {
       if (limit) params.append('limit', limit.toString());
 
       const response = await fetch(`${this.baseUrl}/sessions?${params}`, {
-<<<<<<< HEAD
         headers: await this.getAuthHeaders()
-=======
-        headers: this.getAuthHeaders()
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
       });
 
       if (response.ok) {
@@ -132,11 +112,7 @@ class SessionService {
   async getSession(sessionId: string): Promise<{ success: boolean; data?: ChatSession; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
-<<<<<<< HEAD
         headers: await this.getAuthHeaders()
-=======
-        headers: this.getAuthHeaders()
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
       });
 
       if (response.ok) {
@@ -156,11 +132,7 @@ class SessionService {
   async getSessionMessages(sessionId: string): Promise<{ success: boolean; data?: ChatMessage[]; error?: string }> {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}/messages`, {
-<<<<<<< HEAD
         headers: await this.getAuthHeaders()
-=======
-        headers: this.getAuthHeaders()
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
       });
 
       if (response.ok) {
@@ -179,11 +151,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'PUT',
-<<<<<<< HEAD
         headers: await this.getAuthHeaders(),
-=======
-        headers: this.getAuthHeaders(),
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
         body: JSON.stringify(updateData),
       });
 
@@ -205,11 +173,7 @@ class SessionService {
     try {
       const response = await fetch(`${this.baseUrl}/sessions/${sessionId}`, {
         method: 'DELETE',
-<<<<<<< HEAD
         headers: await this.getAuthHeaders()
-=======
-        headers: this.getAuthHeaders()
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
       });
 
       if (response.ok) {

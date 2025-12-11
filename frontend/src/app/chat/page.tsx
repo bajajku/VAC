@@ -321,28 +321,29 @@ const ChatPage = () => {
               cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
             }
 
-          // Extract sources from the chunk and collect them (don't display yet)
-          if (cleanChunk.includes('[SOURCE]')) {
-            console.log('🔍 Found [SOURCE] in chunk:', cleanChunk);
-            const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
-            console.log('🔍 Source matches:', sourceMatches);
-            if (sourceMatches) {
-              sourceMatches.forEach(match => {
-                const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '').trim();
-                // Better duplicate checking - normalize URLs
-                const normalizedSource = sourceContent.toLowerCase();
-                const isDuplicate = collectedSources.some(existing => 
-                  existing.toLowerCase() === normalizedSource
-                );
-                if (sourceContent && !isDuplicate) {
-                  collectedSources.push(sourceContent);
-                  console.log('✅ Added source:', sourceContent);
-                  console.log('📝 Total collected sources:', collectedSources.length);
-                }
-              });
+            // Extract sources from the chunk and collect them (don't display yet)
+            if (cleanChunk.includes('[SOURCE]')) {
+              console.log('🔍 Found [SOURCE] in chunk:', cleanChunk);
+              const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
+              console.log('🔍 Source matches:', sourceMatches);
+              if (sourceMatches) {
+                sourceMatches.forEach(match => {
+                  const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '').trim();
+                  // Better duplicate checking - normalize URLs
+                  const normalizedSource = sourceContent.toLowerCase();
+                  const isDuplicate = collectedSources.some(existing => 
+                    existing.toLowerCase() === normalizedSource
+                  );
+                  if (sourceContent && !isDuplicate) {
+                    collectedSources.push(sourceContent);
+                    console.log('✅ Added source:', sourceContent);
+                    console.log('📝 Total collected sources:', collectedSources.length);
+                  }
+                });
+              }
+              // Remove source markers from the chunk so they don't appear in chat
+              cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
             }
-            // Remove source markers from the chunk so they don't appear in chat
-            cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
           }
       
           // Add content to fullText

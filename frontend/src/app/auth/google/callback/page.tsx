@@ -15,7 +15,6 @@ const GoogleCallback = () => {
       try {
         // Check if we have access_token in the URL (second phase)
         const accessToken = searchParams.get('access_token');
-<<<<<<< HEAD
         const refreshToken = searchParams.get('refresh_token');
         
         if (accessToken && refreshToken) {
@@ -23,13 +22,6 @@ const GoogleCallback = () => {
           // We're in the second phase, store the tokens and redirect
           Cookies.set('token', accessToken, { expires: 7, sameSite: 'Lax' });
           Cookies.set('refresh_token', refreshToken, { expires: 7, sameSite: 'Lax' });
-=======
-        
-        if (accessToken && refreshToken) {
-          console.log('Found tokens in URL, completing login');
-          // We're in the second phase, store the tokens and redirect
-          Cookies.set('token', accessToken, { expires: 7, sameSite: 'Lax' });
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
           router.push('/chat');
           return;
         }
@@ -48,21 +40,11 @@ const GoogleCallback = () => {
         const callbackUrl = `${BASE_URL}/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
         console.log('Calling backend:', callbackUrl);
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
         const response = await fetch(callbackUrl, {
           headers: {
             'ngrok-skip-browser-warning': 'true'
           }
         });
-<<<<<<< HEAD
-=======
-        const response = await fetch(callbackUrl);
->>>>>>> c833bc7 (feat: Implement chat session management in the API and frontend (#8))
-=======
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
         console.log('Backend response status:', response.status);
 
         const data = await response.json();
