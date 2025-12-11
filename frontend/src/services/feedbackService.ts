@@ -125,7 +125,6 @@ class FeedbackService {
     this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   }
 
-<<<<<<< HEAD
   private async getHeaders(): Promise<HeadersInit> {
     // Try to refresh token if needed
     const isValid = await refreshTokenIfNeeded();
@@ -139,11 +138,6 @@ class FeedbackService {
     return {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
-=======
-  private getHeaders(): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
       'ngrok-skip-browser-warning': 'true'
     };
   }
@@ -153,11 +147,7 @@ class FeedbackService {
     try {
       const response = await fetch(`${this.baseUrl}/feedback`, {
         method: 'POST',
-<<<<<<< HEAD
         headers: await this.getHeaders(),
-=======
-        headers: this.getHeaders(),
->>>>>>> 85f5f79 (feat: Add ngrok header to API requests across authentication and feedback services)
         body: JSON.stringify(feedback),
       });
 
