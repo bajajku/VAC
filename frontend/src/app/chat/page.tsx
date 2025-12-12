@@ -579,10 +579,10 @@ const ChatPage = () => {
 
                 {/* Sources Section for Bot Messages */}
                 {message.sender === 'bot' && message.sources && message.sources.length > 0 && (
-                  <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-lg shadow-sm">
+                  <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg shadow-sm">
                     <div className="flex items-center mb-1 sm:mb-2">
-                      <ExternalLink className="w-3 h-3 text-slate-500 mr-1 sm:mr-2" />
-                      <span className="text-xs font-medium text-slate-600">Sources:</span>
+                      <ExternalLink className="w-3 h-3 text-slate-500 dark:text-slate-400 mr-1 sm:mr-2" />
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Sources:</span>
                     </div>
                     <div className="space-y-1">
                       {message.sources.map((source, idx) => {
@@ -603,18 +603,18 @@ const ChatPage = () => {
 
                         return (
                           <div key={idx} className="group">
-                            <a 
+                            <a
                               href={source}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline block transition-colors duration-150 group-hover:bg-white/60 p-1 rounded touch-target"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block transition-colors duration-150 group-hover:bg-white/60 dark:group-hover:bg-slate-600/60 p-1 rounded touch-target"
                               title={source}
                             >
                               <div className="flex items-center space-x-1">
                                 <span className="font-medium text-xs">{getSourceTitle(source)}</span>
                                 <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                               </div>
-                              <div className="text-slate-500 truncate mt-0.5 text-xs">
+                              <div className="text-slate-500 dark:text-slate-400 truncate mt-0.5 text-xs">
                                 {source}
                               </div>
                             </a>
@@ -627,10 +627,10 @@ const ChatPage = () => {
 
                 {/* Sources Loading Indicator for Bot Messages while typing */}
                 {message.sender === 'bot' && isTyping && messages[messages.length - 1]?.id === message.id && (
-                  <div className="mt-2 sm:mt-3 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="mt-2 sm:mt-3 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg">
                     <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
-                      <span className="text-xs text-slate-500">Loading sources...</span>
+                      <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">Loading sources...</span>
                     </div>
                   </div>
                 )}
