@@ -23,6 +23,46 @@
   --safe-green: #86efac;
   --comfort-cream: #fef3c7;
   --trust-blue: #3b82f6;
+
+  /* Chat-specific colors */
+  --chat-bg: #f8fafc;
+  --chat-bubble-bot: #ffffff;
+  --chat-bubble-user: #2563eb;
+  --chat-border: #e2e8f0;
+  --header-bg: rgba(255, 255, 255, 0.95);
+  --input-bg: #f1f5f9;
+}
+
+/* Dark mode colors - warm, not harsh */
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+
+  --primary-blue: #60a5fa;
+  --primary-navy: #93c5fd;
+  --success-green: #34d399;
+  --warm-gray: #94a3b8;
+  --light-blue: #1e3a5f;
+  --sage-green: #6ee7b7;
+  --warm-beige: #292524;
+  --trust-navy: #f8fafc;
+
+  --calming-teal: #2dd4bf;
+  --soft-emerald: #34d399;
+  --gentle-sky: #38bdf8;
+  --warm-amber: #fbbf24;
+  --soothing-lavender: #a78bfa;
+  --safe-green: #4ade80;
+  --comfort-cream: #44403c;
+  --trust-blue: #60a5fa;
+
+  /* Chat-specific dark colors */
+  --chat-bg: #0f172a;
+  --chat-bubble-bot: #1e293b;
+  --chat-bubble-user: #3b82f6;
+  --chat-border: #334155;
+  --header-bg: rgba(15, 23, 42, 0.95);
+  --input-bg: #1e293b;
 }
 
 @theme inline {
@@ -32,12 +72,15 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f1f5f9;
-  }
-}
+/* Utility classes for theme */
+.bg-background { background-color: var(--background); }
+.text-foreground { color: var(--foreground); }
+.bg-chat { background-color: var(--chat-bg); }
+.bg-chat-bubble-bot { background-color: var(--chat-bubble-bot); }
+.bg-chat-bubble-user { background-color: var(--chat-bubble-user); }
+.border-chat { border-color: var(--chat-border); }
+.bg-header { background-color: var(--header-bg); }
+.bg-input { background-color: var(--input-bg); }
 
 body {
   background: var(--background);

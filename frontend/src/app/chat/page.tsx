@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Shield, User, ArrowLeft, CheckCircle2, ExternalLink, LogOut, Wind } from 'lucide-react';
 import CrisisResources from '../../components/CrisisResources';
 import GroundingTools from '../../components/GroundingTools';
+import ThemeToggle from '../../components/ThemeToggle';
 import VoiceInput from '../../components/VoiceInput';
 import TTS from '../../components/TTS';
 import Link from 'next/link';
@@ -435,27 +436,27 @@ const ChatPage = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 safe-area-inset-top safe-area-inset-bottom">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 safe-area-inset-top safe-area-inset-bottom transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 shadow-sm mobile-header-landscape">
+      <header className="bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 shadow-sm mobile-header-landscape transition-colors">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 sm:space-x-3 flex-1 min-w-0">
-            <Link 
-              href="/" 
-              className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center transition-colors touch-target"
+            <Link
+              href="/"
+              className="w-8 h-8 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg flex items-center justify-center transition-colors touch-target"
               aria-label="Return to home"
             >
-              <ArrowLeft className="w-4 h-4 text-slate-600" />
+              <ArrowLeft className="w-4 h-4 text-slate-600 dark:text-slate-400" />
             </Link>
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-lg sm:rounded-xl flex items-center justify-center">
               <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm sm:text-lg font-semibold text-slate-900 truncate">Confidential Support Session</h1>
-              <p className="text-xs sm:text-sm text-slate-600 hidden sm:block">Secure • Private • Supportive</p>
+              <h1 className="text-sm sm:text-lg font-semibold text-slate-900 dark:text-slate-100 truncate">Confidential Support Session</h1>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 hidden sm:block">Secure • Private • Supportive</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="hidden md:block">
               <SessionManager
                 ref={sessionManagerRef}
@@ -464,17 +465,18 @@ const ChatPage = () => {
                 onNewSession={handleNewSession}
               />
             </div>
+            <ThemeToggle />
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors touch-target"
+              className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-2 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors touch-target"
               aria-label="Logout"
             >
               <LogOut className="w-4 h-4" />
               <span className="text-sm font-medium hidden sm:inline">Logout</span>
             </button>
             <div className="hidden sm:flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-sm text-slate-600 hidden lg:inline">Secure Connection</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-sm text-slate-600 dark:text-slate-400 hidden lg:inline">Secure</span>
             </div>
           </div>
         </div>
@@ -540,30 +542,30 @@ const ChatPage = () => {
                 <div className={`rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm ${
                   message.sender === 'user'
                     ? 'bg-blue-600 text-white ml-auto'
-                    : 'bg-white border border-slate-200 text-slate-800'
+                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
                 }`}>
                   {message.sender === 'bot' ? (
-                    <div className="prose prose-sm max-w-none">
-                      <ReactMarkdown 
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
                           // Custom components for better styling
-                          p: ({ children }) => <p className="mb-2 sm:mb-3 last:mb-0 leading-relaxed text-xs sm:text-sm text-slate-800">{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800">{children}</ol>,
-                          li: ({ children }) => <li className="text-xs sm:text-sm leading-relaxed text-slate-800">{children}</li>,
-                          h1: ({ children }) => <h1 className="text-sm sm:text-lg font-semibold mb-2 text-slate-800">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-sm sm:text-base font-medium mb-2 text-slate-700">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-xs sm:text-sm font-medium mb-1 text-slate-600">{children}</h3>,
-                          strong: ({ children }) => <strong className="font-semibold text-slate-800">{children}</strong>,
-                          em: ({ children }) => <em className="italic text-slate-700">{children}</em>,
+                          p: ({ children }) => <p className="mb-2 sm:mb-3 last:mb-0 leading-relaxed text-xs sm:text-sm text-slate-800 dark:text-slate-200">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800 dark:text-slate-200">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal pl-3 sm:pl-4 mb-2 sm:mb-3 space-y-1 text-slate-800 dark:text-slate-200">{children}</ol>,
+                          li: ({ children }) => <li className="text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200">{children}</li>,
+                          h1: ({ children }) => <h1 className="text-sm sm:text-lg font-semibold mb-2 text-slate-800 dark:text-slate-100">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-sm sm:text-base font-medium mb-2 text-slate-700 dark:text-slate-200">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-xs sm:text-sm font-medium mb-1 text-slate-600 dark:text-slate-300">{children}</h3>,
+                          strong: ({ children }) => <strong className="font-semibold text-slate-800 dark:text-slate-100">{children}</strong>,
+                          em: ({ children }) => <em className="italic text-slate-700 dark:text-slate-300">{children}</em>,
                           blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-blue-200 pl-2 sm:pl-3 py-1 my-2 bg-blue-50 rounded-r text-slate-700">
+                            <blockquote className="border-l-4 border-blue-200 dark:border-blue-700 pl-2 sm:pl-3 py-1 my-2 bg-blue-50 dark:bg-blue-900/30 rounded-r text-slate-700 dark:text-slate-300">
                               {children}
                             </blockquote>
                           ),
                           code: ({ children }) => (
-                            <code className="bg-slate-100 px-1 py-0.5 rounded text-xs font-mono text-slate-800">{children}</code>
+                            <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-xs font-mono text-slate-800 dark:text-slate-200">{children}</code>
                           )
                         }}
                       >
@@ -702,15 +704,15 @@ const ChatPage = () => {
       </div>
 
       {/* Wellness Bar */}
-      <div className="px-3 sm:px-4 md:px-6 py-2 bg-gradient-to-r from-teal-50/80 to-emerald-50/80 border-t border-teal-200/30">
+      <div className="px-3 sm:px-4 md:px-6 py-2 bg-gradient-to-r from-teal-50/80 to-emerald-50/80 dark:from-teal-900/30 dark:to-emerald-900/30 border-t border-teal-200/30 dark:border-teal-800/30 transition-colors">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-teal-700">
+          <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-teal-700 dark:text-teal-400">
             <Shield className="w-3 h-3 flex-shrink-0" />
             <span className="leading-tight">Your conversation is confidential and secure.</span>
           </div>
           <button
             onClick={() => setShowGroundingTools(true)}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded-full text-xs font-medium transition-colors"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-teal-100 dark:bg-teal-800/50 hover:bg-teal-200 dark:hover:bg-teal-800 text-teal-700 dark:text-teal-300 rounded-full text-xs font-medium transition-colors"
             aria-label="Open grounding tools"
           >
             <Wind className="w-3 h-3" />
@@ -721,7 +723,7 @@ const ChatPage = () => {
       </div>
 
       {/* Input Area */}
-      <div className="bg-white/90 backdrop-blur-md border-t border-slate-200/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 mobile-input-landscape safe-area-inset-bottom">
+      <div className="bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/50 dark:border-slate-700/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 mobile-input-landscape safe-area-inset-bottom transition-colors">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="flex-1 relative">
@@ -730,24 +732,24 @@ const ChatPage = () => {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(e)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(e)}
                 placeholder="Take your time... share when you're ready"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-slate-800 placeholder-slate-500 text-sm sm:text-base"
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-all duration-200 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 text-sm sm:text-base"
                 disabled={isTyping}
                 aria-label="Type your message"
               />
             </div>
-            
+
             {/* Voice Input Component */}
-            <VoiceInput 
+            <VoiceInput
               onTranscriptChange={handleVoiceTranscriptChange}
               disabled={isTyping}
             />
-            
+
             <button
               onClick={handleSendMessage}
               disabled={!inputText.trim() || isTyping}
-              className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl sm:rounded-2xl flex items-center justify-center hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95 touch-target"
+              className="w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl sm:rounded-2xl flex items-center justify-center hover:from-blue-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95 touch-target"
               aria-label="Send message"
             >
               <Send className="w-4 h-4" />

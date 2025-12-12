@@ -58,25 +58,25 @@ const CrisisResources: React.FC<CrisisResourcesProps> = ({
 
   if (variant === 'banner') {
     return (
-      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-b border-emerald-200">
+      <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-900/20 dark:via-teal-900/20 dark:to-cyan-900/20 border-b border-emerald-200 dark:border-emerald-800/50 transition-colors">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-emerald-100 p-2 rounded-full">
-                <Heart className="w-5 h-5 text-emerald-600" />
+              <div className="bg-emerald-100 dark:bg-emerald-800/50 p-2 rounded-full">
+                <Heart className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <p className="text-sm font-medium text-emerald-900">
+                <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
                   You&apos;re not alone. Support is available 24/7.
                 </p>
-                <p className="text-xs text-emerald-700">
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
                   Veterans Crisis Line: <strong>1-833-456-4566</strong>
                 </p>
               </div>
             </div>
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 text-sm font-medium transition-colors"
+              className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 text-sm font-medium transition-colors"
               aria-expanded={isExpanded}
               aria-label={isExpanded ? "Hide resources" : "Show more resources"}
             >
@@ -89,32 +89,32 @@ const CrisisResources: React.FC<CrisisResourcesProps> = ({
           </div>
 
           {isExpanded && (
-            <div className="mt-4 pt-4 border-t border-emerald-200 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800/50 grid gap-3 md:grid-cols-3">
               {resources.map((resource, index) => (
                 <div
                   key={index}
                   className={`p-3 rounded-lg ${
                     resource.primary
-                      ? 'bg-emerald-100 border border-emerald-300'
-                      : 'bg-white/70 border border-emerald-100'
+                      ? 'bg-emerald-100 dark:bg-emerald-800/40 border border-emerald-300 dark:border-emerald-700'
+                      : 'bg-white/70 dark:bg-slate-800/50 border border-emerald-100 dark:border-emerald-800/30'
                   }`}
                 >
                   <div className="flex items-start gap-2">
                     <resource.icon className={`w-4 h-4 mt-0.5 ${
-                      resource.primary ? 'text-emerald-700' : 'text-emerald-600'
+                      resource.primary ? 'text-emerald-700 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-500'
                     }`} />
                     <div>
                       <p className={`text-sm font-medium ${
-                        resource.primary ? 'text-emerald-900' : 'text-emerald-800'
+                        resource.primary ? 'text-emerald-900 dark:text-emerald-200' : 'text-emerald-800 dark:text-emerald-300'
                       }`}>
                         {resource.name}
                       </p>
                       <p className={`text-sm font-semibold ${
-                        resource.primary ? 'text-emerald-700' : 'text-emerald-600'
+                        resource.primary ? 'text-emerald-700 dark:text-emerald-400' : 'text-emerald-600 dark:text-emerald-500'
                       }`}>
                         {resource.phone}
                       </p>
-                      <p className="text-xs text-emerald-600 mt-1">
+                      <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
                         {resource.description}
                       </p>
                     </div>
