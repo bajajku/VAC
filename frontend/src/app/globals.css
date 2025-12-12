@@ -3,8 +3,8 @@
 :root {
   --background: #fefefe;
   --foreground: #1a1a1a;
-  
-  /* Trauma-informed color palette - calming, trustworthy */
+
+  /* Trauma-informed color palette - calming, trustworthy, warm */
   --primary-blue: #2563eb;
   --primary-navy: #1e3a8a;
   --success-green: #059669;
@@ -13,6 +13,16 @@
   --sage-green: #6ee7b7;
   --warm-beige: #fef7ed;
   --trust-navy: #0f172a;
+
+  /* Extended trauma-informed palette */
+  --calming-teal: #0d9488;
+  --soft-emerald: #10b981;
+  --gentle-sky: #7dd3fc;
+  --warm-amber: #fbbf24;
+  --soothing-lavender: #c4b5fd;
+  --safe-green: #86efac;
+  --comfort-cream: #fef3c7;
+  --trust-blue: #3b82f6;
 }
 
 @theme inline {
@@ -228,9 +238,129 @@ p, span, div {
     font-size: 0.875rem;
     line-height: 1.4;
   }
-  
+
   .mobile-text-xs {
     font-size: 0.75rem;
     line-height: 1.3;
   }
+}
+
+/* ===== TRAUMA-INFORMED DESIGN ENHANCEMENTS ===== */
+
+/* Calming gradient backgrounds */
+.bg-calming {
+  background: linear-gradient(135deg, #f0fdfa 0%, #ecfdf5 50%, #f0fdf4 100%);
+}
+
+.bg-safe-space {
+  background: linear-gradient(180deg, #fefefe 0%, #f0fdfa 50%, #ecfdf5 100%);
+}
+
+/* Soft shadows for less harsh UI */
+.shadow-soft {
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.05), 0 4px 16px -4px rgba(0, 0, 0, 0.05);
+}
+
+.shadow-gentle {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+/* Breathing animation for grounding tools */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.animate-breathe {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* Gentle pulse for status indicators */
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-gentle-pulse {
+  animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+/* Reduced motion preference support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .animate-breathe,
+  .animate-gentle-pulse {
+    animation: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --background: #ffffff;
+    --foreground: #000000;
+  }
+
+  button,
+  .touch-target {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+  outline: 3px solid var(--calming-teal);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Skip focus ring for mouse users */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Warm message bubble styles */
+.message-bubble-bot {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
+  border: 1px solid #d1fae5;
+}
+
+.message-bubble-user {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* Calming card style */
+.card-calming {
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
+  border: 1px solid #d1fae5;
+  border-radius: 1rem;
+  box-shadow: 0 2px 8px -2px rgba(13, 148, 136, 0.1);
+}
+
+/* Safe space indicator */
+.safe-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(90deg, #ecfdf5 0%, #f0fdfa 100%);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  color: #047857;
+}
+
+.safe-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: gentle-pulse 2s ease-in-out infinite;
 }

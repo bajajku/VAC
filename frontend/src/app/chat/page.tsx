@@ -1,6 +1,8 @@
 "use client"
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Shield, User, ArrowLeft, AlertCircle, CheckCircle2, ExternalLink, LogOut } from 'lucide-react';
+import { Send, Shield, User, ArrowLeft, CheckCircle2, ExternalLink, LogOut, Wind } from 'lucide-react';
+import CrisisResources from '../../components/CrisisResources';
+import GroundingTools from '../../components/GroundingTools';
 import VoiceInput from '../../components/VoiceInput';
 import TTS from '../../components/TTS';
 import Link from 'next/link';
@@ -16,7 +18,7 @@ import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const INITIAL_GREETING = "Hello, I'm your confidential support assistant. I'm here to listen and provide supportive guidance in a safe, judgment-free space. How can I help you today?";
+const INITIAL_GREETING = "Welcome. I'm here to support you in a safe, confidential space. There's no judgment here—only understanding. Take your time, and share whatever feels right. How can I help you today?";
 
 type QuestionAnswer = {
   question: string;
@@ -84,6 +86,7 @@ const ChatPage = () => {
   const sessionManagerRef = useRef<SessionManagerRef>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [showGroundingTools, setShowGroundingTools] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -375,7 +378,7 @@ const ChatPage = () => {
         console.error('Error sending message:', error);
         setMessages(prev => [...prev, {
           id: Date.now() + 1,
-          text: "I apologize, but I'm having trouble connecting right now. Please try again in a moment. If you need immediate support, please reach out to a healthcare professional or the Veterans Crisis Line.",
+          text: "I'm having a moment of difficulty connecting, but your conversation is safe. Please take a breath and try again when you're ready. If you need immediate support, the Veterans Crisis Line is available 24/7 at 1-833-456-4566.",
           sender: 'bot',
           timestamp: new Date(),
           tts: true
@@ -487,15 +490,26 @@ const ChatPage = () => {
         </div>
       </header>
 
+      {/* Crisis Resources Banner */}
+      <CrisisResources variant="banner" />
+
+      {/* Grounding Tools Modal */}
+      {showGroundingTools && (
+        <GroundingTools
+          variant="modal"
+          onClose={() => setShowGroundingTools(false)}
+        />
+      )}
+
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6 mobile-scroll">
         <div className="max-w-4xl mx-auto">
           {/* Loading Session Indicator */}
           {isLoadingSession && (
             <div className="flex items-center justify-center py-8">
-              <div className="flex items-center space-x-3">
-                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-                <span className="text-slate-600 text-sm">Loading conversation...</span>
+              <div className="flex flex-col items-center space-y-3">
+                <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full"></div>
+                <span className="text-slate-600 text-sm">Preparing your safe space...</span>
               </div>
             </div>
           )}
@@ -679,7 +693,7 @@ const ChatPage = () => {
                   <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
-              <span className="text-xs text-slate-500 self-end hidden sm:inline">Thinking...</span>
+              <span className="text-xs text-slate-500 self-end hidden sm:inline">Taking a moment to understand...</span>
             </div>
           )}
 
@@ -687,13 +701,22 @@ const ChatPage = () => {
         </div>
       </div>
 
-      {/* Privacy Notice */}
-      <div className="px-3 sm:px-4 md:px-6 py-2 bg-blue-50/50 border-t border-blue-200/30">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-blue-700">
-            <AlertCircle className="w-3 h-3 flex-shrink-0" />
-            <span className="leading-tight">This conversation is confidential. For crisis situations, contact emergency services or the Veterans Crisis Line: 1-800-273-8255</span>
+      {/* Wellness Bar */}
+      <div className="px-3 sm:px-4 md:px-6 py-2 bg-gradient-to-r from-teal-50/80 to-emerald-50/80 border-t border-teal-200/30">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-1 sm:space-x-2 text-xs text-teal-700">
+            <Shield className="w-3 h-3 flex-shrink-0" />
+            <span className="leading-tight">Your conversation is confidential and secure.</span>
           </div>
+          <button
+            onClick={() => setShowGroundingTools(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-teal-100 hover:bg-teal-200 text-teal-700 rounded-full text-xs font-medium transition-colors"
+            aria-label="Open grounding tools"
+          >
+            <Wind className="w-3 h-3" />
+            <span className="hidden sm:inline">Need a moment?</span>
+            <span className="sm:hidden">Pause</span>
+          </button>
         </div>
       </div>
 
@@ -708,7 +731,7 @@ const ChatPage = () => {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage(e)}
-                placeholder="Share what's on your mind... (Press Enter to send)"
+                placeholder="Take your time... share when you're ready"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-slate-800 placeholder-slate-500 text-sm sm:text-base"
                 disabled={isTyping}
                 aria-label="Type your message"
