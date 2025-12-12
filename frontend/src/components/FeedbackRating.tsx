@@ -38,11 +38,11 @@ const HoverInfoCard = ({ info }: { info: string }) => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Info className="w-4 h-4 text-slate-400 hover:text-slate-500 cursor-help transition-colors duration-150" />
-      
+      <Info className="w-4 h-4 text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 cursor-help transition-colors duration-150" />
+
       {isHovered && (
         <div
-          className="absolute left-0 top-full mt-2 p-3 bg-slate-50 border border-slate-300 rounded-lg shadow z-50 w-64 text-xs text-slate-700"
+          className="absolute left-0 top-full mt-2 p-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow z-50 w-64 text-xs text-slate-700 dark:text-slate-200"
           style={{ transform: 'translateY(4px)' }}
         >
           {info}
@@ -76,7 +76,7 @@ const StarRating: React.FC<{
   return (
     <div className="flex flex-col space-y-1">
       <div className="flex items-center space-x-2">
-        <label className="text-xs text-slate-600 font-medium">{label}</label>
+        <label className="text-xs text-slate-600 dark:text-slate-300 font-medium">{label}</label>
         <HoverInfoCard info={info} />
       </div>
       <div className="flex space-x-1">
@@ -93,7 +93,7 @@ const StarRating: React.FC<{
               className={`w-full h-full ${
                 star <= (hoverRating || rating || 0)
                   ? 'text-amber-400 fill-amber-300 drop-shadow-sm'
-                  : 'text-slate-300'
+                  : 'text-slate-300 dark:text-slate-600'
               }`}
             />
           </button>
@@ -208,14 +208,14 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
 
   if (submitted) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2">
+      <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3 mt-2">
         <div className="flex items-center space-x-2">
           <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
             <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
           </div>
-          <p className="text-sm text-emerald-700 font-medium">Thank you for your feedback!</p>
+          <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">Thank you for your feedback!</p>
         </div>
       </div>
     );
@@ -227,9 +227,9 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
         <button
           onClick={() => updateFeedback('vote', feedback.vote === 'like' ? null : 'like')}
           className={`p-1.5 rounded-full transition-colors duration-150 ${
-            feedback.vote === 'like' 
-              ? 'bg-emerald-100 text-emerald-600' 
-              : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50'
+            feedback.vote === 'like'
+              ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400'
+              : 'text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
           }`}
         >
           <ThumbsUp className="w-4 h-4" />
@@ -237,23 +237,23 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
         <button
           onClick={() => updateFeedback('vote', feedback.vote === 'dislike' ? null : 'dislike')}
           className={`p-1.5 rounded-full transition-colors duration-150 ${
-            feedback.vote === 'dislike' 
-              ? 'bg-rose-100 text-rose-600' 
-              : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50'
+            feedback.vote === 'dislike'
+              ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400'
+              : 'text-slate-400 dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30'
           }`}
         >
           <ThumbsDown className="w-4 h-4" />
         </button>
         <button
           onClick={() => setIsExpanded(true)}
-          className="p-1.5 rounded-full text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors duration-150"
+          className="p-1.5 rounded-full text-slate-400 dark:text-slate-500 hover:text-sky-500 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors duration-150"
         >
           <MessageSquare className="w-4 h-4" />
         </button>
         {hasValidFeedback && (
           <button
             onClick={handleSubmit}
-            className="px-3 py-1 bg-slate-700 text-white text-xs rounded-full hover:bg-slate-800 transition-colors duration-150"
+            className="px-3 py-1 bg-slate-700 dark:bg-slate-600 text-white text-xs rounded-full hover:bg-slate-800 dark:hover:bg-slate-500 transition-colors duration-150"
           >
             Submit
           </button>
@@ -263,14 +263,14 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
   }
 
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mt-3 space-y-4">
+    <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mt-3 space-y-4">
       {/* Quick Vote */}
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-slate-700">Rate this response</h4>
+        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-200">Rate this response</h4>
         {compact && (
           <button
             onClick={() => setIsExpanded(false)}
-            className="text-slate-400 hover:text-slate-600 text-xs"
+            className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-xs"
           >
             Collapse
           </button>
@@ -281,29 +281,29 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
         <button
           onClick={() => updateFeedback('vote', feedback.vote === 'like' ? null : 'like')}
           className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-150 ${
-            feedback.vote === 'like' 
-              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' 
-              : 'bg-white border border-slate-200 hover:bg-emerald-50 hover:border-emerald-200'
+            feedback.vote === 'like'
+              ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700'
+              : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-700'
           }`}
         >
-          <ThumbsUp className="w-4 h-4 text-emerald-500" />
-          <span className="text-sm text-slate-700">Helpful</span>
+          <ThumbsUp className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+          <span className="text-sm text-slate-700 dark:text-slate-200">Helpful</span>
         </button>
         <button
           onClick={() => updateFeedback('vote', feedback.vote === 'dislike' ? null : 'dislike')}
           className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-150 ${
-            feedback.vote === 'dislike' 
-              ? 'bg-rose-100 text-rose-700 border border-rose-300' 
-              : 'bg-white border border-slate-200 hover:bg-rose-50 hover:border-rose-200'
+            feedback.vote === 'dislike'
+              ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-400 border border-rose-300 dark:border-rose-700'
+              : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:border-rose-200 dark:hover:border-rose-700'
           }`}
         >
-          <ThumbsDown className="w-4 h-4 text-rose-500" />
-          <span className="text-sm text-slate-700">Not helpful</span>
+          <ThumbsDown className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+          <span className="text-sm text-slate-700 dark:text-slate-200">Not helpful</span>
         </button>
       </div>
 
       {/* Detailed Ratings */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200 dark:border-slate-700">
         <StarRating
           rating={feedback.retrieval_relevance}
           onRating={(rating) => updateFeedback('retrieval_relevance', rating)}
@@ -393,38 +393,38 @@ const FeedbackRating: React.FC<FeedbackRatingProps> = ({
       {/* Comment Section */}
       <div className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
             General Feedback
           </label>
           <textarea
             value={feedback.comment}
             onChange={(e) => updateFeedback('comment', e.target.value)}
             placeholder="What did you think about this response? Any suggestions?"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent resize-none bg-white text-slate-700 placeholder:text-slate-400"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent resize-none bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             rows={2}
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-2">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
             Expert Notes (Optional)
           </label>
           <textarea
             value={feedback.expertNotes}
             onChange={(e) => updateFeedback('expertNotes', e.target.value)}
             placeholder="Detailed notes for training improvement, ideal response structure, missing information, etc."
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-transparent resize-none bg-white text-slate-700 placeholder:text-slate-400"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-500 focus:border-transparent resize-none bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             rows={3}
           />
         </div>
       </div>
 
       {/* Submit Button */}
-      <div className="flex justify-end pt-2 border-t border-slate-200">
+      <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
         <button
           onClick={handleSubmit}
           disabled={!hasValidFeedback}
-          className="flex items-center space-x-2 px-4 py-2 bg-slate-700 text-white text-sm rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+          className="flex items-center space-x-2 px-4 py-2 bg-slate-700 dark:bg-slate-600 text-white text-sm rounded-lg hover:bg-slate-800 dark:hover:bg-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
         >
           <Send className="w-4 h-4" />
           <span>Submit Feedback</span>

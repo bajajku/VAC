@@ -510,8 +510,8 @@ const ChatPage = () => {
           {isLoadingSession && (
             <div className="flex items-center justify-center py-8">
               <div className="flex flex-col items-center space-y-3">
-                <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full"></div>
-                <span className="text-slate-600 text-sm">Preparing your safe space...</span>
+                <div className="animate-spin w-6 h-6 border-2 border-teal-500 dark:border-teal-400 border-t-transparent rounded-full"></div>
+                <span className="text-slate-600 dark:text-slate-400 text-sm">Preparing your safe space...</span>
               </div>
             </div>
           )}
@@ -638,7 +638,7 @@ const ChatPage = () => {
                 <div className={`flex items-center mt-1 sm:mt-2 space-x-2 ${
                   message.sender === 'user' ? 'justify-end' : 'justify-start'
                 }`}>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
                     {formatTime(message.timestamp)}
                   </span>
                   
@@ -688,14 +688,14 @@ const ChatPage = () => {
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center shadow-sm">
                 <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-slate-400 dark:bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               </div>
-              <span className="text-xs text-slate-500 self-end hidden sm:inline">Taking a moment to understand...</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 self-end hidden sm:inline">Taking a moment to understand...</span>
             </div>
           )}
 
