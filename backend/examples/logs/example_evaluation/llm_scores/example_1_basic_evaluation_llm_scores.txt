@@ -2,7 +2,6 @@ DETAILED LLM SCORING SUMMARY
 ===========================
 Generated: 2025-07-28 15:42:18
 
-
 QUERY 1: What are the symptoms of PTSD in military veterans?
 ===========================================================
 
