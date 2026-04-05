@@ -33,7 +33,7 @@ type FeedbackData = {
   accuracy?: number;
   helpfulness?: number;
   clarity?: number;
-  
+
   // Detailed feedback categories (1-5 star ratings)
   retrieval_relevance?: number;
   hallucination?: number;
@@ -49,7 +49,7 @@ type FeedbackData = {
   brand_damage?: number;
   empathy?: number;
   sensitivity?: number;
-  
+
   vote: 'like' | 'dislike' | null;
   comment: string;
   expertNotes: string;
@@ -137,10 +137,10 @@ const ChatPage = () => {
       const result = await sessionService.getSessionMessages(sessionId);
       if (result.success && result.data) {
         // Convert backend messages to frontend format
-        const convertedMessages = result.data.map((msg, index) => 
+        const convertedMessages = result.data.map((msg, index) =>
           sessionService.convertBackendMessage(msg, index + 1)
         );
-        
+
         // Add initial bot message if no messages exist
         if (convertedMessages.length === 0) {
           setMessages([{
@@ -185,7 +185,7 @@ const ChatPage = () => {
   const handleSendMessage = (e?: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     if (!inputText.trim() || isTyping) return;
-  
+
     const userMessage: Message = {
       id: Date.now(),
       text: inputText,
@@ -193,7 +193,7 @@ const ChatPage = () => {
       timestamp: new Date(),
       tts: false
     };
-  
+
     setMessages(prev => [...prev, userMessage]);
     setLastQuestion(inputText);
     setInputText('');
@@ -209,7 +209,7 @@ const ChatPage = () => {
 
   useEffect(() => {
     if (!isTyping || !lastQuestion) return;
-  
+
     const processStream = async () => {
       try {
         const token = Cookies.get('token');
@@ -225,7 +225,7 @@ const ChatPage = () => {
             const payload = JSON.parse(atob(tokenParts[1]));
             const expiresAt = payload.exp * 1000;
             const now = Date.now();
-            
+
             // Only refresh if token expires in less than 1 minute (reduced from 5 minutes)
             if (expiresAt <= now + 60000) {
               const refreshToken = Cookies.get('refresh_token');
@@ -267,17 +267,21 @@ const ChatPage = () => {
             session_id: sessionId
           })
         });
-  
+
         if (!response.body) {
           throw new Error("Response body is null");
         }
-  
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let fullText = '';
         const collectedSources: string[] = [];
         let botMessageId: number | null = null;
-        
+
+        // Optimized variables for better performance
+        let chunkCounter = 0;
+        const updateInterval = 3; // Update UI every 3 chunks instead of every chunk
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) {
@@ -301,14 +305,14 @@ const ChatPage = () => {
             }
             break;
           }
-  
-          
+
+
           const chunk = decoder.decode(value, { stream: true });
-          
+
           // Fast path: Skip processing if no special markers
           const hasMarkers = chunk.includes('[SESSION_ID]') || chunk.includes('[SOURCE]');
           let cleanChunk = chunk.replace(/^data: /gm, '').replace(/\n\n/g, '');
-          
+
           if (hasMarkers) {
             // Extract and remove session_id BEFORE processing other content
             if (cleanChunk.includes('[SESSION_ID]')) {
@@ -321,60 +325,50 @@ const ChatPage = () => {
               cleanChunk = cleanChunk.replace(/\[SESSION_ID\].*?\[\/SESSION_ID\]/g, '');
             }
 
-            // Extract sources from the chunk and collect them (don't display yet)
+            // Extract sources - simplified logic
             if (cleanChunk.includes('[SOURCE]')) {
-              console.log('🔍 Found [SOURCE] in chunk:', cleanChunk);
               const sourceMatches = cleanChunk.match(/\[SOURCE\](.*?)\[\/SOURCE\]/g);
-              console.log('🔍 Source matches:', sourceMatches);
               if (sourceMatches) {
                 sourceMatches.forEach(match => {
                   const sourceContent = match.replace(/\[SOURCE\]|\[\/SOURCE\]/g, '').trim();
-                  // Better duplicate checking - normalize URLs
-                  const normalizedSource = sourceContent.toLowerCase();
-                  const isDuplicate = collectedSources.some(existing => 
-                    existing.toLowerCase() === normalizedSource
-                  );
-                  if (sourceContent && !isDuplicate) {
+                  if (sourceContent && !collectedSources.includes(sourceContent)) {
                     collectedSources.push(sourceContent);
-                    console.log('✅ Added source:', sourceContent);
-                    console.log('📝 Total collected sources:', collectedSources.length);
                   }
                 });
               }
-              // Remove source markers from the chunk so they don't appear in chat
               cleanChunk = cleanChunk.replace(/\[SOURCE\].*?\[\/SOURCE\]/g, '');
             }
           }
-      
+
           // Add content to fullText
           if (cleanChunk.trim()) {
             fullText += cleanChunk;
           }
 
-          // Ensure we have a bot message created as soon as we get any content
-          if (!botMessageId && (fullText || collectedSources.length > 0)) {
-            const newBotMessage: Message = {
-              id: Date.now() + 1,
-              text: fullText,
-              sender: 'bot',
-              timestamp: new Date(),
-              sources: [...collectedSources],
-              tts: true
-            };
-            botMessageId = newBotMessage.id;
-            setMessages(prev => [...prev, newBotMessage]);
-          } else if (botMessageId) {
-            // Update existing bot message with current text and sources
-            setMessages(prev =>
-              prev.map(msg =>
-                msg.id === botMessageId
-                  ? { ...msg, text: fullText, sources: [...collectedSources] }
-                  : msg
-              )
-            );
+          // Throttled UI updates for better performance
+          chunkCounter++;
+          const shouldUpdate = chunkCounter % updateInterval === 0 || done;
+
+          if (shouldUpdate && fullText) {
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.sender === 'bot' && last.id === botMessageId) {
+                return [...prev.slice(0, -1), { ...last, text: fullText }];
+              } else if (!botMessageId) {
+                const newBotMessage: Message = {
+                  id: Date.now() + 1,
+                  text: fullText,
+                  sender: 'bot',
+                  timestamp: new Date(),
+                };
+                botMessageId = newBotMessage.id;
+                return [...prev, newBotMessage];
+              }
+              return prev;
+            });
           }
         }
-  
+
       } catch (error) {
         console.error('Error sending message:', error);
         setMessages(prev => [...prev, {
@@ -387,9 +381,9 @@ const ChatPage = () => {
         setIsTyping(false);
       }
     };
-  
+
     processStream();
-  
+
   }, [isTyping, lastQuestion, sessionId, router]);
 
   const handleFeedbackSubmit = async (feedback: FeedbackData) => {
@@ -397,9 +391,9 @@ const ChatPage = () => {
       const result = await feedbackService.submitFeedback(feedback);
       if (result.success) {
         // Mark the message as having feedback submitted
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id.toString() === feedback.responseId 
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id.toString() === feedback.responseId
               ? { ...msg, feedbackSubmitted: true }
               : msg
           )
@@ -428,10 +422,10 @@ const ChatPage = () => {
   };
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit', 
-      hour12: true 
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
     });
   };
 
@@ -480,7 +474,7 @@ const ChatPage = () => {
             </div>
           </div>
         </div>
-        
+
         {/* Mobile Session Manager */}
         <div className="md:hidden mt-3">
           <SessionManager
@@ -518,16 +512,14 @@ const ChatPage = () => {
           {!isLoadingSession && messages.map((message) => (
             <div
               key={message.id}
-              className={`flex items-start space-x-2 sm:space-x-4 animate-in slide-in-from-bottom-2 duration-300 ${
-                message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-              }`}
+              className={`flex items-start space-x-2 sm:space-x-4 animate-in slide-in-from-bottom-2 duration-300 ${message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                }`}
             >
               {/* Avatar */}
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${
-                message.sender === 'user' 
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600' 
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${message.sender === 'user'
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600'
                   : 'bg-gradient-to-r from-indigo-500 to-purple-600'
-              }`}>
+                }`}>
                 {message.sender === 'user' ? (
                   <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 ) : (
@@ -536,14 +528,12 @@ const ChatPage = () => {
               </div>
 
               {/* Message Content */}
-              <div className={`flex-1 max-w-[85%] sm:max-w-2xl ${
-                message.sender === 'user' ? 'items-end' : 'items-start'
-              }`}>
-                <div className={`rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm ${
-                  message.sender === 'user'
+              <div className={`flex-1 max-w-[85%] sm:max-w-2xl ${message.sender === 'user' ? 'items-end' : 'items-start'
+                }`}>
+                <div className={`rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 shadow-sm ${message.sender === 'user'
                     ? 'bg-blue-600 text-white ml-auto'
                     : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-                }`}>
+                  }`}>
                   {message.sender === 'bot' ? (
                     <div className="prose prose-sm max-w-none dark:prose-invert">
                       <ReactMarkdown
@@ -634,23 +624,22 @@ const ChatPage = () => {
                     </div>
                   </div>
                 )}
-                
-                <div className={`flex items-center mt-1 sm:mt-2 space-x-2 ${
-                  message.sender === 'user' ? 'justify-end' : 'justify-start'
-                }`}>
+
+                <div className={`flex items-center mt-1 sm:mt-2 space-x-2 ${message.sender === 'user' ? 'justify-end' : 'justify-start'
+                  }`}>
                   <span className="text-xs text-slate-500 dark:text-slate-400">
                     {formatTime(message.timestamp)}
                   </span>
-                  
+
                   {/* TTS Button for Bot Messages */}
                   {message.sender === 'bot' && message.tts && (
-                    <TTS 
-                      text={message.text} 
+                    <TTS
+                      text={message.text}
                       compact={true}
                       className="ml-1"
                     />
                   )}
-                  
+
                   {message.sender === 'bot' && message.feedbackSubmitted && (
                     <div className="flex items-center space-x-1">
                       <CheckCircle2 className="w-3 h-3 text-green-500" />
@@ -658,7 +647,7 @@ const ChatPage = () => {
                     </div>
                   )}
                 </div>
-                
+
                 {/* Feedback Component for Bot Messages */}
                 {message.sender === 'bot' && !message.feedbackSubmitted && message.id !== 1 && (
                   <div className="mt-2 sm:mt-3">

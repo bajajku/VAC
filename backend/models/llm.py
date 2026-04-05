@@ -213,8 +213,8 @@ class ChatOpenAILLM(BaseLLM):
             base_url=self.config['base_url'] if 'base_url' in self.config else "http://localhost:8080/v1",
             model=self.model_name,
             api_key=self.api_key,
-            streaming=streaming,
-            **{k: v for k, v in self.config.items() if k not in ['model', 'base_url', 'streaming']}
+            streaming=True,
+            **{k: v for k, v in self.config.items() if k != 'model'}
         )
 
 class LLMFactory:   

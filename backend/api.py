@@ -598,7 +598,7 @@ async def startup_event():
             "collection_name": "demo_collection",
             "api_key": "token-abc123",
             "chats_by_session_id": {},
-            "input_guardrails": Guardrails().with_policy("maximum_protection"),
+            "input_guardrails": Guardrails().with_policy("military_mental_health_performance_optimized"),
         }
         rag_app.initialize(**config)
 
@@ -1064,16 +1064,8 @@ async def stream_query(
         # Send session_id first
         yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
         
-        # Store user message
-        try:
-            user_message = ChatMessage(
-                content=request.question,
-                sender="user",
-                timestamp=datetime.utcnow()
-            )
-            await chat_session_service.add_message(session_id, user_message)
-        except Exception as e:
-            print(f"Warning: Could not store user message: {e}")
+        # Store user message in background (non-blocking)
+        background_tasks.add_task(store_user_message_background, session_id, request.question)
         
         # Collect the full AI response and sources
         full_response = ""
@@ -1107,17 +1099,12 @@ async def stream_query(
                     print(source)
                     yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
         
-        # Store AI response
-        try:
-            if full_response.strip():
-                ai_message = ChatMessage(
-                    content=full_response,
-                    sender="assistant",
-                    timestamp=datetime.utcnow()
-                )
-                await chat_session_service.add_message(session_id, ai_message)
-        except Exception as e:
-            print(f"Warning: Could not store AI message: {e}")
+        # Record total streaming time
+        total_time = time.time() - stream_start_time
+        performance_monitor.record_metric("total_stream_time", total_time)
+        
+        # Store AI response in background (non-blocking)
+        background_tasks.add_task(store_ai_message_background, session_id, full_response, collected_sources)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -1194,28 +1181,49 @@ async def stream_query_optimized(
     """Highly optimized streaming endpoint with minimal overhead."""
     if not is_initialized:
         raise HTTPException(status_code=503, detail="RAG system not initialized")
-    
+
     async def event_stream():
         # Minimal session handling - use cached session or fallback
         session_id = request.session_id or f"temp-{current_user.email}-{int(time.time())}"
-        
+
         # Send session_id immediately
         yield f"data: [SESSION_ID]{session_id}[/SESSION_ID]\n\n"
-        
-        # Direct streaming with minimal processing
-        try:
-            for chunk in rag_app.stream_query(request.question, session_id):
-                if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
-                    # Direct yield without extra processing
-                    yield f"data: {chunk[0].content}\n\n"
-                elif isinstance(chunk[0], ToolMessage):
-                    # Quick source extraction
-                    sources = extract_sources_from_toolmessage(chunk[0].content)
-                    for source in sources:
-                        if source:
-                            yield f"data: [SOURCE]{source}[/SOURCE]\n\n"
-        except Exception as e:
-            yield f"data: Error: {str(e)}\n\n"
+
+        # Use an async queue to bridge sync generator to async streaming
+        queue = asyncio.Queue()
+
+        def process_sync_stream():
+            """Run the sync generator in a thread and push chunks to queue."""
+            try:
+                for chunk in rag_app.stream_query(request.question, session_id):
+                    if isinstance(chunk[0], AIMessage) and chunk[0].content and not chunk[0].tool_calls:
+                        queue.put_nowait(("content", chunk[0].content))
+                    elif isinstance(chunk[0], ToolMessage):
+                        sources = extract_sources_from_toolmessage(chunk[0].content)
+                        for source in sources:
+                            if source:
+                                queue.put_nowait(("source", source))
+            except Exception as e:
+                queue.put_nowait(("error", str(e)))
+            finally:
+                queue.put_nowait(("done", None))
+
+        # Run sync generator in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, process_sync_stream)
+
+        # Yield chunks as they arrive in the queue
+        while True:
+            msg_type, content = await queue.get()
+            if msg_type == "done":
+                break
+            elif msg_type == "error":
+                yield f"data: Error: {content}\n\n"
+                break
+            elif msg_type == "content":
+                yield f"data: {content}\n\n"
+            elif msg_type == "source":
+                yield f"data: [SOURCE]{content}[/SOURCE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
