@@ -1,0 +1,80 @@
+# Backend Automation Script — One-Command Startup
+
+Create a single bash script that installs all dependencies (no sudo) and launches the full backend pipeline (Core API + vLLM + ngrok) in a tmux session.
+
+## Proposed Changes
+
+### [NEW] [start_backend.sh](file:///Users/kunalbajaj/VAC/backend/start_backend.sh)
+
+A comprehensive bash script organized into these phases:
+
+#### Phase 1 — Configuration Variables
+Easily editable block at the top of the file:
+- `VLLM_MODEL="Qwen/Qwen2.5-14B-Instruct"` — model served by vLLM
+- `VLLM_PORT=8001` — vLLM OpenAI-compatible server port
+- `API_PORT=8000` — Core API FastAPI port
+- `NGROK_AUTH_TOKEN` — read from [.env](file:///Users/kunalbajaj/VAC/backend/.env) or environment, with prompt fallback
+- `HUGGING_FACE_TOKEN` — read from [.env](file:///Users/kunalbajaj/VAC/backend/.env) for gated model downloads
+- `TMUX_SESSION="vac-backend"` — tmux session name
+
+#### Phase 2 — Dependency Installation (idempotent, no sudo)
+
+| Dependency | Install method | Check |
+|------------|----------------|-------|
+| **Python venv** | `python3 -m venv .venv` | Check if `.venv/` exists |
+| **pip packages** | `pip install -r requirements.txt` | Always run (pip handles already-installed) |
+| **vLLM** | `pip install vllm` | `python -c "import vllm"` |
+| **ngrok** | Download binary to `~/.local/bin/ngrok` | `command -v ngrok` or check `~/.local/bin/ngrok` |
+| **tmux** | Already expected on server | `command -v tmux` — fail with clear message if missing |
+
+> [!IMPORTANT]
+> vLLM requires CUDA. The script checks for `nvidia-smi` and prints GPU info before proceeding.
+
+> [!NOTE]
+> ngrok is downloaded as a standalone amd64 binary (no sudo needed). The script adds `~/.local/bin` to `PATH`.
+
+#### Phase 3 — Tmux Session with 3 Panes
+
+```
+┌──────────────────────────────────────────┐
+│              vac-backend (tmux)           │
+├────────────┬────────────┬────────────────┤
+│  Pane 0    │  Pane 1    │  Pane 2        │
+│  Core API  │  vLLM      │  ngrok         │
+│            │            │                │
+│  uvicorn   │  vllm      │  ngrok http    │
+│  api:app   │  serve     │  8000          │
+│  :8000     │  :8001     │                │
+└────────────┴────────────┴────────────────┘
+```
+
+- **Pane 0 (Core API)**: `cd backend && source .venv/bin/activate && uvicorn api:app_api --host 0.0.0.0 --port 8000`
+- **Pane 1 (vLLM)**: `source .venv/bin/activate && vllm serve Qwen/Qwen2.5-14B-Instruct --port 8001 --host 0.0.0.0`
+- **Pane 2 (ngrok)**: `ngrok http 8000` (with auth token pre-configured)
+
+The script attaches to the tmux session after launching all panes, so the user can switch between them with `Ctrl-b + arrow keys`.
+
+#### Phase 4 — Health Checks & UX
+
+- Print a summary banner after launch with all URLs
+- Color-coded status messages throughout
+- Graceful handling of "already running" tmux sessions (offer to kill & restart)
+- `--stop` flag to kill the existing tmux session
+
+## Verification Plan
+
+### Automated Tests
+```bash
+# Syntax check the script
+bash -n backend/start_backend.sh
+
+# Verify the script is executable and has the right shebang
+head -1 backend/start_backend.sh  # Should be #!/usr/bin/env bash
+```
+
+### Manual Verification
+The script targets an Ubuntu Linux GPU server, so full end-to-end testing requires that environment. The user can verify by:
+1. Copy `start_backend.sh` to the GPU server
+2. Run `bash start_backend.sh` 
+3. Confirm all 3 tmux panes start and services become reachable
+4. Run `bash start_backend.sh --stop` to tear down
