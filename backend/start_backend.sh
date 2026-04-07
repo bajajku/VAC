@@ -188,16 +188,16 @@ success "pip upgraded"
 # ─────────────────────────────────────────────────────────────────────
 # INSTALL BACKEND DEPENDENCIES
 # ─────────────────────────────────────────────────────────────────────
-header "Installing Backend Dependencies"
+# header "Installing Backend Dependencies"
 
-REQUIREMENTS="${SCRIPT_DIR}/requirements.txt"
-if [[ -f "$REQUIREMENTS" ]]; then
-    info "Installing from requirements.txt..."
-    pip install -r "$REQUIREMENTS" --quiet
-    success "Backend dependencies installed"
-else
-    warn "requirements.txt not found at ${REQUIREMENTS}"
-fi
+# REQUIREMENTS="${SCRIPT_DIR}/requirements.txt"
+# if [[ -f "$REQUIREMENTS" ]]; then
+#     info "Installing from requirements.txt..."
+#     pip install -r "$REQUIREMENTS" --quiet
+#     success "Backend dependencies installed"
+# else
+#     warn "requirements.txt not found at ${REQUIREMENTS}"
+# fi
 
 # ─────────────────────────────────────────────────────────────────────
 # INSTALL vLLM
