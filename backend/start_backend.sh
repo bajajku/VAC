@@ -18,7 +18,7 @@ set -euo pipefail
 VLLM_MODEL="Qwen/Qwen2.5-14B-Instruct"
 VLLM_PORT=8001
 API_PORT=8000
-TMUX_SESSION="vac"
+TMUX_SESSION="vac-backend"
 NGROK_VERSION="v3-stable"
 
 # Resolve the backend directory (where this script lives)
