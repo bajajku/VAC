@@ -6,9 +6,11 @@
 # ╚══════════════════════════════════════════════════════════════════╝
 #
 # Usage:
-#   bash start_backend.sh          # Install deps & launch everything
-#   bash start_backend.sh --stop   # Tear down the tmux session
-#   bash start_backend.sh --status # Check if services are running
+#   bash start_backend.sh            # Install deps & launch everything
+#   bash start_backend.sh --stop     # Stop all services
+#   bash start_backend.sh --status   # Check if services are running
+#   bash start_backend.sh --logs     # Tail all service logs
+#   bash start_backend.sh --logs api # Tail a specific service log
 #
 set -euo pipefail
 
@@ -18,7 +20,6 @@ set -euo pipefail
 VLLM_MODEL="Qwen/Qwen2.5-14B-Instruct"
 VLLM_PORT=8001
 API_PORT=8000
-TMUX_SESSION="vac-backend"
 NGROK_VERSION="v3-stable"
 
 # Resolve the backend directory (where this script lives)
@@ -26,6 +27,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${SCRIPT_DIR}/.venv"
 LOCAL_BIN="${HOME}/.local/bin"
 NGROK_BIN="${LOCAL_BIN}/ngrok"
+
+# Directories for logs and PID files
+LOG_DIR="${SCRIPT_DIR}/logs"
+PID_DIR="${SCRIPT_DIR}/.pids"
 
 # ─────────────────────────────────────────────────────────────────────
 # COLORS & HELPERS
@@ -44,25 +49,116 @@ warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[FAIL]${NC}  $*"; }
 header()  { echo -e "\n${BOLD}${CYAN}═══ $* ═══${NC}\n"; }
 
+# Check if a service is running by its PID file
+is_running() {
+    local name="$1"
+    local pidfile="${PID_DIR}/${name}.pid"
+    if [[ -f "$pidfile" ]]; then
+        local pid
+        pid=$(cat "$pidfile")
+        if kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Stop a specific service
+stop_service() {
+    local name="$1"
+    local pidfile="${PID_DIR}/${name}.pid"
+    if [[ -f "$pidfile" ]]; then
+        local pid
+        pid=$(cat "$pidfile")
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+            # Wait up to 5 seconds for graceful shutdown
+            for _ in $(seq 1 10); do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                    break
+                fi
+                sleep 0.5
+            done
+            # Force kill if still running
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+            success "Stopped ${name} (PID ${pid})"
+        else
+            warn "${name} was not running (stale PID ${pid})"
+        fi
+        rm -f "$pidfile"
+    else
+        warn "No PID file for ${name}"
+    fi
+}
+
 # ─────────────────────────────────────────────────────────────────────
-# --stop / --status FLAGS
+# --stop FLAG
 # ─────────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--stop" ]]; then
-    if tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
-        tmux kill-session -t "${TMUX_SESSION}"
-        success "Stopped tmux session '${TMUX_SESSION}'"
-    else
-        warn "No tmux session '${TMUX_SESSION}' found"
+    header "Stopping Services"
+    for svc in ngrok vllm api; do
+        stop_service "$svc"
+    done
+    exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────────
+# --status FLAG
+# ─────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "--status" ]]; then
+    header "Service Status"
+    any_running=false
+    for svc in api vllm ngrok; do
+        pidfile="${PID_DIR}/${svc}.pid"
+        if [[ -f "$pidfile" ]]; then
+            pid=$(cat "$pidfile")
+            if kill -0 "$pid" 2>/dev/null; then
+                success "${svc} is running (PID ${pid})"
+                any_running=true
+            else
+                warn "${svc} is NOT running (stale PID file)"
+                rm -f "$pidfile"
+            fi
+        else
+            warn "${svc} is NOT running (no PID file)"
+        fi
+    done
+    echo ""
+    if $any_running; then
+        info "View logs: bash start_backend.sh --logs"
+        info "Stop all:  bash start_backend.sh --stop"
     fi
     exit 0
 fi
 
-if [[ "${1:-}" == "--status" ]]; then
-    if tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
-        success "Session '${TMUX_SESSION}' is running"
-        tmux list-panes -t "${TMUX_SESSION}" -F "  Pane #{pane_index}: #{pane_current_command} (#{pane_pid})"
+# ─────────────────────────────────────────────────────────────────────
+# --logs FLAG
+# ─────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "--logs" ]]; then
+    svc="${2:-}"
+    if [[ -n "$svc" ]]; then
+        logfile="${LOG_DIR}/${svc}.log"
+        if [[ -f "$logfile" ]]; then
+            tail -f "$logfile"
+        else
+            error "Log file not found: ${logfile}"
+            exit 1
+        fi
     else
-        warn "No tmux session '${TMUX_SESSION}' found"
+        # Tail all log files
+        logfiles=()
+        for f in api vllm ngrok; do
+            if [[ -f "${LOG_DIR}/${f}.log" ]]; then
+                logfiles+=("${LOG_DIR}/${f}.log")
+            fi
+        done
+        if [[ ${#logfiles[@]} -eq 0 ]]; then
+            error "No log files found in ${LOG_DIR}"
+            exit 1
+        fi
+        tail -f "${logfiles[@]}"
     fi
     exit 0
 fi
@@ -71,14 +167,6 @@ fi
 # PRE-FLIGHT CHECKS
 # ─────────────────────────────────────────────────────────────────────
 header "Pre-flight Checks"
-
-# tmux is required
-if ! command -v tmux &>/dev/null; then
-    error "tmux is not installed. Please ask your admin to install it, or:"
-    echo "       conda install -c conda-forge tmux   (if conda is available)"
-    exit 1
-fi
-success "tmux found: $(tmux -V)"
 
 # Python 3
 PYTHON=""
@@ -103,16 +191,25 @@ else
     warn "Continuing anyway (vLLM will fail to start if no GPU is available)"
 fi
 
-# Check for existing session
-if tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
-    warn "Tmux session '${TMUX_SESSION}' already exists!"
-    read -rp "       Kill it and start fresh? [y/N]: " answer
+# Check for already-running services
+any_already_running=false
+for svc in api vllm ngrok; do
+    if is_running "$svc"; then
+        any_already_running=true
+    fi
+done
+
+if $any_already_running; then
+    warn "Some services are already running!"
+    echo ""
+    bash "${BASH_SOURCE[0]}" --status 2>/dev/null || true
+    echo ""
+    read -rp "       Stop them and start fresh? [y/N]: " answer
     if [[ "${answer,,}" == "y" ]]; then
-        tmux kill-session -t "${TMUX_SESSION}"
-        success "Killed old session"
+        bash "${BASH_SOURCE[0]}" --stop 2>/dev/null || true
+        success "Stopped old services"
     else
-        info "Attaching to existing session..."
-        tmux attach-session -t "${TMUX_SESSION}"
+        info "Exiting. Use --stop to stop services, or --status to check."
         exit 0
     fi
 fi
@@ -124,11 +221,8 @@ header "Loading Environment"
 
 ENV_FILE="${SCRIPT_DIR}/.env"
 if [[ -f "$ENV_FILE" ]]; then
-    # Source .env, handling spaces around = signs
     while IFS= read -r line || [[ -n "$line" ]]; do
-        # Skip comments & empty lines
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-        # Remove leading/trailing whitespace, normalize key=value
         clean="$(echo "$line" | sed 's/[[:space:]]*=[[:space:]]*/=/')"
         if [[ "$clean" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
             export "$clean"
@@ -139,7 +233,7 @@ else
     warn ".env file not found at ${ENV_FILE}"
 fi
 
-# HUGGING_FACE_TOKEN — needed for gated models
+# HUGGING_FACE_TOKEN
 HF_TOKEN="${HUGGING_FACE_TOKEN:-${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}}"
 if [[ -z "$HF_TOKEN" ]]; then
     warn "No Hugging Face token found (HUGGING_FACE_TOKEN / HF_TOKEN)"
@@ -163,41 +257,70 @@ if [[ -n "$NGROK_TOKEN" ]]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────
-# PYTHON VIRTUAL ENVIRONMENT
+# INSTALL uv (if not present)
 # ─────────────────────────────────────────────────────────────────────
-header "Python Virtual Environment"
+header "Package Manager (uv)"
 
-if [[ -d "$VENV_DIR" && -f "${VENV_DIR}/bin/activate" ]]; then
-    success "Virtual environment exists at ${VENV_DIR}"
+if command -v uv &>/dev/null; then
+    success "uv found: $(uv --version)"
 else
-    info "Creating virtual environment at ${VENV_DIR}..."
-    $PYTHON -m venv "$VENV_DIR"
-    success "Virtual environment created"
+    info "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
+    if command -v uv &>/dev/null; then
+        success "uv installed: $(uv --version)"
+    else
+        error "Failed to install uv. Install manually: https://docs.astral.sh/uv/"
+        exit 1
+    fi
 fi
 
-# Activate
-# shellcheck disable=SC1091
-source "${VENV_DIR}/bin/activate"
-success "Activated venv ($(python --version))"
-
-# Upgrade pip
-info "Upgrading pip..."
-pip install --upgrade pip --quiet
-success "pip upgraded"
-
 # ─────────────────────────────────────────────────────────────────────
-# INSTALL BACKEND DEPENDENCIES
+# INSTALL BACKEND DEPENDENCIES (via uv)
 # ─────────────────────────────────────────────────────────────────────
-# header "Installing Backend Dependencies"
+header "Installing Backend Dependencies"
 
-# REQUIREMENTS="${SCRIPT_DIR}/requirements.txt"
-# if [[ -f "$REQUIREMENTS" ]]; then
-#     info "Installing from requirements.txt..."
-#     pip install -r "$REQUIREMENTS" --quiet
-#     success "Backend dependencies installed"
-# else
-#     warn "requirements.txt not found at ${REQUIREMENTS}"
-# fi
+cd "$SCRIPT_DIR"
+
+if [[ -f "pyproject.toml" ]]; then
+    info "Running uv sync (using pyproject.toml + uv.lock)..."
+    if uv sync 2>&1; then
+        success "Dependencies installed via uv sync"
+    else
+        warn "uv sync failed — falling back to installing packages individually..."
+        # Extract package names from pyproject.toml dependencies and install one by one
+        uv pip install --quiet pip 2>/dev/null || true
+        FAILED_PKGS=()
+        while IFS= read -r pkg; do
+            # Strip quotes, whitespace, trailing comma
+            pkg=$(echo "$pkg" | sed 's/^[[:space:]]*"//;s/"[[:space:]]*,*$//')
+            [[ -z "$pkg" || "$pkg" == "]" || "$pkg" == "[" ]] && continue
+            if ! uv pip install "$pkg" --quiet 2>/dev/null; then
+                warn "Skipped: ${pkg} (install failed)"
+                FAILED_PKGS+=("$pkg")
+            fi
+        done < <(sed -n '/^dependencies = \[/,/^\]/p' pyproject.toml | grep -v 'dependencies' | grep -v '^\]')
+        if [[ ${#FAILED_PKGS[@]} -gt 0 ]]; then
+            warn "Failed packages: ${FAILED_PKGS[*]}"
+            warn "You may need to install these manually"
+        else
+            success "All packages installed individually"
+        fi
+    fi
+else
+    warn "pyproject.toml not found — skipping dependency installation"
+fi
+
+# Activate the venv that uv created/managed
+VENV_DIR="${SCRIPT_DIR}/.venv"
+if [[ -f "${VENV_DIR}/bin/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "${VENV_DIR}/bin/activate"
+    success "Activated venv ($(python --version))"
+else
+    error "No virtual environment found at ${VENV_DIR}. uv sync should have created one."
+    exit 1
+fi
 
 # ─────────────────────────────────────────────────────────────────────
 # INSTALL vLLM
@@ -209,14 +332,17 @@ if python -c "import vllm" 2>/dev/null; then
     success "vLLM already installed (v${VLLM_VER})"
 else
     info "Installing vLLM (this may take a few minutes)..."
-    pip install vllm
-    if python -c "import vllm" 2>/dev/null; then
-        VLLM_VER=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
-        success "vLLM installed successfully (v${VLLM_VER})"
+    if uv pip install vllm 2>&1; then
+        if python -c "import vllm" 2>/dev/null; then
+            VLLM_VER=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
+            success "vLLM installed successfully (v${VLLM_VER})"
+        else
+            warn "vLLM installed but import failed — will try to launch anyway"
+        fi
     else
-        error "vLLM installation failed. Check CUDA compatibility."
-        error "You may need: pip install vllm --extra-index-url https://download.pytorch.org/whl/cu129"
-        exit 1
+        warn "vLLM installation failed. Check CUDA compatibility."
+        warn "You may need: uv pip install vllm --extra-index-url https://download.pytorch.org/whl/cu129"
+        warn "Continuing without vLLM..."
     fi
 fi
 
@@ -225,7 +351,6 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 header "Installing ngrok"
 
-# Check if ngrok is already available
 NGROK_CMD=""
 if command -v ngrok &>/dev/null; then
     NGROK_CMD="ngrok"
@@ -273,11 +398,10 @@ if [[ -n "${NGROK_AUTHTOKEN:-}" ]]; then
     success "ngrok auth token configured"
 fi
 
-# Ensure ~/.local/bin is in PATH for tmux panes
 export PATH="${LOCAL_BIN}:${PATH}"
 
 # ─────────────────────────────────────────────────────────────────────
-# PRE-DOWNLOAD THE vLLM MODEL (optional but avoids first-run delay)
+# PRE-DOWNLOAD THE vLLM MODEL
 # ─────────────────────────────────────────────────────────────────────
 header "Checking Model Availability"
 
@@ -299,38 +423,76 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────
-# LAUNCH TMUX SESSION
+# LAUNCH SERVICES AS BACKGROUND PROCESSES
 # ─────────────────────────────────────────────────────────────────────
-header "Launching Services in tmux"
+header "Launching Services"
 
-# Build the activation prefix for tmux panes
-ACTIVATE_CMD="source ${VENV_DIR}/bin/activate"
-ENV_EXPORTS=""
-[[ -n "${HF_TOKEN:-}" ]] && ENV_EXPORTS+="export HF_TOKEN='${HF_TOKEN}'; export HUGGING_FACE_HUB_TOKEN='${HF_TOKEN}'; "
-[[ -n "${NGROK_AUTHTOKEN:-}" ]] && ENV_EXPORTS+="export NGROK_AUTHTOKEN='${NGROK_AUTHTOKEN}'; "
-ENV_EXPORTS+="export PATH='${LOCAL_BIN}:\$PATH'; "
+mkdir -p "$LOG_DIR" "$PID_DIR"
 
-# Pane commands
-CMD_API="cd ${SCRIPT_DIR} && ${ACTIVATE_CMD} && ${ENV_EXPORTS} echo -e '${GREEN}[Core API]${NC} Starting on port ${API_PORT}...' && uvicorn api:app_api --host 0.0.0.0 --port ${API_PORT}"
+# ── 1. Core API ──────────────────────────────────────────────────────
+info "Starting Core API on port ${API_PORT}..."
+cd "$SCRIPT_DIR"
+nohup "${VENV_DIR}/bin/uvicorn" api:app_api \
+    --host 0.0.0.0 \
+    --port "$API_PORT" \
+    >> "${LOG_DIR}/api.log" 2>&1 &
+API_PID=$!
+echo "$API_PID" > "${PID_DIR}/api.pid"
 
-CMD_VLLM="cd ${SCRIPT_DIR} && ${ACTIVATE_CMD} && ${ENV_EXPORTS} echo -e '${GREEN}[vLLM]${NC} Starting ${VLLM_MODEL} on port ${VLLM_PORT}...' && vllm serve ${VLLM_MODEL} --port ${VLLM_PORT} --host 0.0.0.0"
+# Verify it started
+sleep 1
+if kill -0 "$API_PID" 2>/dev/null; then
+    success "Core API started (PID ${API_PID}) → ${LOG_DIR}/api.log"
+else
+    error "Core API failed to start. Check ${LOG_DIR}/api.log"
+    tail -5 "${LOG_DIR}/api.log" 2>/dev/null | sed 's/^/         /'
+    exit 1
+fi
 
-CMD_NGROK="sleep 5 && ${ENV_EXPORTS} echo -e '${GREEN}[ngrok]${NC} Tunneling port ${API_PORT}...' && ${NGROK_CMD} http ${API_PORT}"
+# ── 2. vLLM Server ──────────────────────────────────────────────────
+info "Starting vLLM (${VLLM_MODEL}) on port ${VLLM_PORT}..."
+nohup "${VENV_DIR}/bin/vllm" serve "$VLLM_MODEL" \
+    --port "$VLLM_PORT" \
+    --host 0.0.0.0 \
+    >> "${LOG_DIR}/vllm.log" 2>&1 &
+VLLM_PID=$!
+echo "$VLLM_PID" > "${PID_DIR}/vllm.pid"
 
-# Create tmux session with first pane (Core API)
-tmux new-session -d -s "${TMUX_SESSION}" -n "backend" bash -c "${CMD_API}; exec bash"
+sleep 1
+if kill -0 "$VLLM_PID" 2>/dev/null; then
+    success "vLLM started (PID ${VLLM_PID}) → ${LOG_DIR}/vllm.log"
+else
+    error "vLLM failed to start. Check ${LOG_DIR}/vllm.log"
+    tail -5 "${LOG_DIR}/vllm.log" 2>/dev/null | sed 's/^/         /'
+    # Don't exit — API can still work without vLLM
+    warn "Continuing without vLLM..."
+fi
 
-# Split horizontally for vLLM
-tmux split-window -h -t "${TMUX_SESSION}:backend" bash -c "${CMD_VLLM}; exec bash"
+# ── 3. ngrok Tunnel ──────────────────────────────────────────────────
+info "Starting ngrok tunnel for port ${API_PORT}..."
+nohup "$NGROK_CMD" http "$API_PORT" \
+    --log=stdout \
+    >> "${LOG_DIR}/ngrok.log" 2>&1 &
+NGROK_PID=$!
+echo "$NGROK_PID" > "${PID_DIR}/ngrok.pid"
 
-# Split the right pane vertically for ngrok
-tmux split-window -v -t "${TMUX_SESSION}:backend.1" bash -c "${CMD_NGROK}; exec bash"
-
-# Even out the pane layout
-tmux select-layout -t "${TMUX_SESSION}:backend" main-vertical
-
-# Select the first pane
-tmux select-pane -t "${TMUX_SESSION}:backend.0"
+sleep 2
+if kill -0 "$NGROK_PID" 2>/dev/null; then
+    success "ngrok started (PID ${NGROK_PID}) → ${LOG_DIR}/ngrok.log"
+    # Try to extract the public URL from ngrok API
+    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null \
+        | python -c "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])" 2>/dev/null \
+        || echo "check ngrok log")
+    if [[ "$NGROK_URL" != "check ngrok log" ]]; then
+        success "ngrok public URL: ${NGROK_URL}"
+    else
+        info "ngrok URL not yet available — check: curl http://localhost:4040/api/tunnels"
+    fi
+else
+    error "ngrok failed to start. Check ${LOG_DIR}/ngrok.log"
+    tail -5 "${LOG_DIR}/ngrok.log" 2>/dev/null | sed 's/^/         /'
+    warn "Continuing without ngrok..."
+fi
 
 # ─────────────────────────────────────────────────────────────────────
 # LAUNCH BANNER
@@ -341,16 +503,13 @@ echo -e "${BOLD}${CYAN}║           🚀 VAC Backend — All Services Launched 
 echo -e "${BOLD}${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}${CYAN}║${NC}  Core API  │ http://localhost:${API_PORT}                      ${CYAN}║${NC}"
 echo -e "${BOLD}${CYAN}║${NC}  vLLM      │ http://localhost:${VLLM_PORT}  (${VLLM_MODEL}) ${CYAN}║${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  ngrok     │ Tunneling port ${API_PORT} (check ngrok pane)     ${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  ngrok     │ ${NGROK_URL:-check ngrok log}                    ${CYAN}║${NC}"
 echo -e "${BOLD}${CYAN}╠══════════════════════════════════════════════════════════╣${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  tmux session: ${BOLD}${TMUX_SESSION}${NC}                              ${CYAN}║${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  Switch panes:  ${BOLD}Ctrl-b + arrow keys${NC}                   ${CYAN}║${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  Detach:        ${BOLD}Ctrl-b + d${NC}                             ${CYAN}║${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  Re-attach:     ${BOLD}tmux attach -t ${TMUX_SESSION}${NC}               ${CYAN}║${NC}"
-echo -e "${BOLD}${CYAN}║${NC}  Stop all:      ${BOLD}bash start_backend.sh --stop${NC}            ${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  View logs:   ${BOLD}bash start_backend.sh --logs${NC}              ${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  View one:    ${BOLD}bash start_backend.sh --logs api${NC}          ${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  Status:      ${BOLD}bash start_backend.sh --status${NC}            ${CYAN}║${NC}"
+echo -e "${BOLD}${CYAN}║${NC}  Stop all:    ${BOLD}bash start_backend.sh --stop${NC}              ${CYAN}║${NC}"
 echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
-
-# Attach to the session
-info "Attaching to tmux session..."
-tmux attach-session -t "${TMUX_SESSION}"
+echo -e "${GREEN}Services are running in the background. Your terminal is free to use.${NC}"
+echo ""
