@@ -224,8 +224,19 @@ if [[ -f "$ENV_FILE" ]]; then
     while IFS= read -r line || [[ -n "$line" ]]; do
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         clean="$(echo "$line" | sed 's/[[:space:]]*=[[:space:]]*/=/')"
-        if [[ "$clean" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
-            export "$clean"
+        
+        var_name="${clean%%=*}"
+        var_value="${clean#*=}"
+        
+        # Strip leading/trailing double quotes
+        var_value="${var_value%\"}"
+        var_value="${var_value#\"}"
+        # Strip leading/trailing single quotes
+        var_value="${var_value%\'}"
+        var_value="${var_value#\'}"
+        
+        if [[ "$var_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            export "${var_name}=${var_value}"
         fi
     done < "$ENV_FILE"
     success "Loaded .env from ${ENV_FILE}"
