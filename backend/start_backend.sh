@@ -343,7 +343,7 @@ if python -c "import vllm" 2>/dev/null; then
     success "vLLM already installed (v${VLLM_VER})"
 else
     info "Installing vLLM (this may take a few minutes)..."
-    if uv pip install vllm 2>&1; then
+    if uv pip install vllm "openai<1.60.0" 2>&1; then
         if python -c "import vllm" 2>/dev/null; then
             VLLM_VER=$(python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown")
             success "vLLM installed successfully (v${VLLM_VER})"
