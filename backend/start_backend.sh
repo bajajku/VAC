@@ -465,6 +465,12 @@ info "Starting vLLM (${VLLM_MODEL}) on port ${VLLM_PORT}..."
 nohup "${VENV_DIR}/bin/vllm" serve "$VLLM_MODEL" \
     --port "$VLLM_PORT" \
     --host 0.0.0.0 \
+    --tensor-parallel-size 4 \
+    --max-model-len 8192 \
+    --gpu-memory-utilization 0.85 \
+    --trust-remote-code \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
     >> "${LOG_DIR}/vllm.log" 2>&1 &
 VLLM_PID=$!
 echo "$VLLM_PID" > "${PID_DIR}/vllm.pid"
