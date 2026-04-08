@@ -209,8 +209,9 @@ class ChatOpenAILLM(BaseLLM):
     def create_llm(self):
         # Allow streaming to be configured, default to True for backward compatibility
         streaming = self.config.get('streaming', True)
+        base_url = self.config.get('base_url') or os.getenv("OPENAI_API_BASE", "http://localhost:8001/v1")
         return ChatOpenAI(
-            base_url=self.config['base_url'] if 'base_url' in self.config else "http://localhost:8080/v1",
+            base_url=base_url,
             model=self.model_name,
             api_key=self.api_key,
             streaming=True,
