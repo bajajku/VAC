@@ -28,6 +28,7 @@ class RAGAgent:
         self.fallback_service = FallbackService()
         self.graph = self._build_graph()
         self.chats_by_session_id = kwargs.get("chats_by_session_id", {})
+        self.system_prompt = self.get_system_prompt()
     
     def get_system_prompt(self):
         """Get the system prompt for the RAG agent."""
