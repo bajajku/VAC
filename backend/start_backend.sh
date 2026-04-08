@@ -470,7 +470,7 @@ fi
 
 # ── 3. ngrok Tunnel ──────────────────────────────────────────────────
 info "Starting ngrok tunnel for port ${API_PORT}..."
-nohup "$NGROK_CMD" http "$API_PORT" \
+nohup "$NGROK_CMD" http --domain=dassie-skilled-mako.ngrok-free.app "$API_PORT" \
     --log=stdout \
     >> "${LOG_DIR}/ngrok.log" 2>&1 &
 NGROK_PID=$!
